@@ -1,0 +1,98 @@
+﻿@page "/Account/Admin/Rooms"
+
+@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+@rendermode InteractiveServer
+
+@attribute [Authorize(Roles = "Admin")]
+<PageTitle>Meeting Rooms</PageTitle>
+
+<h3 class="ms-5">Meeting Rooms</h3>
+
+
+<div class="nav-item px-3" style="text-align:right; width:55%;">
+    <button class="btn icon1" type="button"
+            style="text-align:justify;" @onclick="OnMouseClicked" @onmouseenter="ShowButtonInfo" @onmouseleave="HideButtonInfo">
+    </button>
+    <div class="showHover text-nowrap" data-hover="@ButtonInfo" style="position:absolute; left:-0.5%;">
+    </div>
+</div>
+<div class="ms-5" style="width:55%;">
+    <QuickGrid Class="table" ItemsProvider="@RoomProvider">
+        <TemplateColumn Context="room" Title="Name">
+            <div class="flex items-center mt-1">
+                <nobr>
+                    @if (room.Price > 0)
+                    {
+                        <strong>@room.Name</strong>
+                    }
+                    else
+                    {
+                        @room.Name
+                    }
+                </nobr>
+            </div>
+        </TemplateColumn>
+        <TemplateColumn Context="room" Title="Actions">
+            <div>
+                <button style="background-color:#4969ee; padding:0.2rem 1rem; color:white; border-radius:0.25rem;
+                        margin:0.25rem 0.5rem;"
+                        @onclick="@(()=> OnViewClicked(room.Id))">
+                    View
+                </button>
+                <button style="background-color:#4969ee; padding:0.2rem 1rem; color:white; border-radius:0.25rem;
+                        margin:0.25rem 0.5rem;"
+                        @onclick="@(()=> OnDeleteClicked(room.Id))">
+                    Delete
+                </button>
+            </div>
+        </TemplateColumn>
+
+    </QuickGrid>
+</div>
+
+@code {
+    PaginationState paginationState = new PaginationState { ItemsPerPage = 10 };
+    GridItemsProvider<Room>? RoomProvider;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public string? color { get; set; }
+
+    [Parameter]
+    public string ButtonInfo { get; set; } = "";
+
+    protected override void OnInitialized()
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        var response = context.Room;
+
+        var rows = response.AsEnumerable<Room>().ToList<Room>();
+        var result = GridItemsProviderResult.From<Room>(items: rows, totalItemCount: rows.Count);
+        RoomProvider = req => ValueTask.FromResult(result);
+    }
+    private void ShowButtonInfo()
+    {
+        ButtonInfo = "Add new room";
+    }
+    private void HideButtonInfo()
+    {
+        Task.Delay(3500);
+        ButtonInfo = "";
+    }
+    private void OnViewClicked(int Id)
+    {
+        NavigationManager.NavigateTo($"Account/Admin/Rooms/Details?id={Id}");
+    }
+    private void OnMouseClicked()
+    {
+        NavigationManager.NavigateTo("Account/Admin/Rooms/Create");
+    }
+    private void OnDeleteClicked(int Id)
+    {
+        NavigationManager.NavigateTo($"Account/Admin/Rooms/Delete?id={Id}");
+    }
+}

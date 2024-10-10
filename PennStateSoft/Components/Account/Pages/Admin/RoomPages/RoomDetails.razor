@@ -1,0 +1,89 @@
+﻿@page "/Account/Admin/Rooms/Details"
+
+@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject NavigationManager NavigationManager
+
+@attribute [Authorize]
+<PageTitle>Details</PageTitle>
+
+<div>
+    @if (room is null)
+    {
+        <h3>Room</h3>
+        <hr />
+        <p><em>Loading...</em></p>
+    }
+    else {
+        <div style="align-content:baseline; background-color:@color; width:60%">
+                <div class="ms-5 mt-5">
+                <h3>@room.Name</h3>
+                <hr />
+                <dl class="row">
+                    <dt class="col-sm-2">Name</dt>
+                    <dd class="col-sm-10">@room.Name</dd>
+                    <dt class="col-sm-2">Capacity</dt>
+                    <dd class="col-sm-10">@room.Capacity</dd>
+                    <dt class="col-sm-2">Price</dt>
+                    @if (room.Price > 0)
+                    {
+                        <dd class="col-sm-10">$@room.Price / hr</dd>
+                    }
+                    else
+                    {
+                        <dd class="col-sm-10">Free</dd>
+                    }
+                    <dt class="col-sm-2">Occupied</dt>
+                    <dd class="col-sm-10">
+                        @if (room.MeetingId > 0)
+                        {
+                            <p>True</p>
+                        }
+                        else
+                        {
+                            <p>False</p>
+                        }
+                    </dd>
+                </dl>
+                <div class="mb-3">
+                    <a class="text-decoration-none" href="@($"Account/Admin/Rooms/Edit?id={room.Id}")">Edit</a> |
+                    <a class="text-decoration-none" href="@($"Account/Admin/Rooms")">Back</a>
+                </div>
+                </div>
+        </div>
+    }
+</div>
+
+@code {
+    Room? room;
+
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    [Parameter]
+    public string? color { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        room = await context.Room.FirstOrDefaultAsync(m => m.Id == Id);
+
+        if (room is null)
+        {
+            NavigationManager.NavigateTo("Account/NotFound");
+        }
+        else
+        {
+            if (room.Price > 0)
+            {
+                color = "aliceblue";
+            }
+            else
+            {
+                color = "whitesmoke";
+            }
+        }
+    }
+}

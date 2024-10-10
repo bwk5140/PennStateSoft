@@ -1,0 +1,15 @@
+﻿@page "/Account/EmailVerificationFAQ"
+
+<PageTitle>Email confirmation?</PageTitle>
+
+<header>
+    <h4 class="text-info">I selected "Email verification link" but nothing happpened. Why is that?</h4>
+    <p class="text-info">
+        We are working on a new email sender that ensures your account information is secure.
+    </p>
+</header>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+}

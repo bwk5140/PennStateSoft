@@ -1,0 +1,213 @@
+﻿@page "/Account/Meetings/Edit"
+
+@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Roles = "Client")]
+
+<PageTitle>Edit Meeting</PageTitle>
+
+@if (IsCreator)
+{
+
+    @if (meeting is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <h4>Edit @meeting.Name</h4>
+        <hr style="width:55%;" />
+        <p class="text-danger">@statusMessage</p>
+        <div class="row">
+            <div class="col-md-4">
+                <EditForm method="post" Model="meeting" OnValidSubmit="@(() => UpdateMeeting(selectedRoom!))" FormName="edit-meeting" Enhance>
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <input type="hidden" name="meeting.Id" value="@meeting.Id" />
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Name:</label>
+                        <InputText id="name" @bind-Value="meeting.Name" class="form-control" />
+                        <ValidationMessage For="() => meeting.Name" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Date:</label>
+                        <InputDate id="date" @bind-Value="meeting.Date" class="form-control" />
+                        <ValidationMessage For="() => meeting.Date" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="time" class="form-label">Time:</label>
+                        <InputDate Type="InputDateType.Time" id="time" @bind-Value="meeting.Time" class="form-control" />
+                        <ValidationMessage For="() => meeting.Time" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="room" class="form-label">Room:</label>
+                        <InputSelect id="room" @bind-Value="selectedRoom" class="form-select">
+                            @if (rooms is not null)
+                            {
+                                foreach (var room in rooms)
+                                {
+                                    <option value="@room.Name">@room.Name</option>
+                                }
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => meeting.RoomId" class="text-danger" />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a class="btn btn-secondary ms-2" href="Account/Meetings">
+                        Cancel
+                    </a>
+                </EditForm>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <NotFound />
+}
+
+@code {
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    private Room[]? rooms { get; set; }
+
+    [SupplyParameterFromForm]
+    private string? selectedRoom { get; set; }
+
+    private Room? room { get; set; }
+
+    [SupplyParameterFromForm]
+    public Meeting? meeting { get; set; }
+
+    [Parameter]
+    public string? statusMessage { get; set; } = "";
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private ClaimsPrincipal? claimsPrincipal { get; set; }
+
+    private bool IsCreator = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        meeting ??= await context.Meeting.FirstOrDefaultAsync(m => m.Id == Id);
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        claimsPrincipal = authState.User;
+
+        if (meeting is null)
+        {
+            NavigationManager.NavigateTo("NotFound");
+        }
+        else
+        {
+            if (claimsPrincipal is not null)
+            {
+                var user = await UserManager.GetUserAsync(claimsPrincipal);
+
+                if (user is not null)
+                {
+                    IsCreator = await UserManager.IsInRoleAsync(user, "MeetingCreator" + meeting.Id);
+                }
+
+            }
+
+            using var RoomContext = DbFactory.CreateDbContext();
+            rooms = RoomContext.Room.AsEnumerable<Room>().ToArray();
+
+            if (selectedRoom is null)
+            {
+                room = rooms.FirstOrDefault(r => r.MeetingId == meeting.Id);
+                selectedRoom = room!.Name;
+            }
+        }
+    }
+    private async Task ReleaseRoom()
+    {
+        using var context = DbFactory.CreateDbContext();
+        var meetingRoom = context.Room.FirstOrDefault(r => r.MeetingId == meeting!.Id);
+
+        //Release room if it has been claimed
+        if (meetingRoom is not null)
+        {
+            meetingRoom!.MeetingId = 0;             //Release the room
+            await context.SaveChangesAsync();
+        }
+    }
+    private async Task AddSelectedRoom(string RoomName)
+    {
+        var newRoom = rooms!.FirstOrDefault(r => r.Name == RoomName);
+
+        if (newRoom!.MeetingId > 0)
+        {
+            using var context = DbFactory.CreateDbContext();
+            var meetingRoom = context.Room.FirstOrDefault(r => r.MeetingId == meeting!.Id);
+
+            statusMessage = $"Error: {newRoom.Name} is currently in use by another meeting.";
+
+            if (meetingRoom!.Id == newRoom.Id)
+            {
+                meeting!.Duration = 1;
+                meeting!.RoomId = newRoom!.Id;   //Set the meeting room
+                room = newRoom;
+                ClaimRoom();                  //Reclaim new room
+                statusMessage = "";
+            }
+        }
+        else
+        {
+            //Release current room
+            await ReleaseRoom();
+            meeting!.Duration = 1;
+            meeting!.RoomId = newRoom!.Id;   //Set the meeting room
+            room = newRoom;
+            ClaimRoom();                  //Claim new room
+            statusMessage = "";
+        }
+    }
+    private async void ClaimRoom()
+    {
+        if (room is not null)
+        {
+            using var context = DbFactory.CreateDbContext();
+            var meetingRoom = context.Room.FirstOrDefault(r => r.Id == room.Id);
+            meetingRoom!.MeetingId = meeting!.Id;    //Claim the room
+            await context.SaveChangesAsync();
+        }
+    }
+
+    // To protect from overposting attacks, enable the specific properties you want to bind to.
+    // For more details, see https://aka.ms/RazorPagesCRUD.
+    public async Task UpdateMeeting(string room)
+    {
+        await AddSelectedRoom(room);
+        if (!statusMessage!.Contains("Error"))
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.Attach(meeting!).State = EntityState.Modified;
+
+            try
+            {
+                await context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                NavigationManager.NavigateTo("NotFound");
+            }
+
+            NavigationManager.NavigateTo($"Account/Meetings/Details?id={meeting!.Id}");
+        }
+        
+    }
+    bool MeetingExists(int id)
+    {
+        using var context = DbFactory.CreateDbContext();
+        return context.Meeting.Any(e => e.Id == id);
+    }
+}

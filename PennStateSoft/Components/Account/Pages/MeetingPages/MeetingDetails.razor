@@ -1,0 +1,163 @@
+﻿@page "/Account/Meetings/Details"
+
+@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject PennStateSoft.Data.ApplicationDbContext AppDb
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+@attribute [Authorize]
+
+<PageTitle>Meeting Details</PageTitle>
+
+@if (IsCreator || IsAdmin || IsInvited)
+{
+    <div style="align-content:baseline; background-color:@color; width:50%">
+        <div class="ms-5 mt-5">
+            
+            @if (meeting is null)
+            {
+                <p><em>Loading...</em></p>
+            }
+            else
+            {
+                <h4>@meeting.Name</h4>
+                <hr />
+                <dl class="row">
+                    <dt class="col-sm-2">Name</dt>
+                    <dd class="col-sm-10">@meeting.Name</dd>
+                    <dt class="col-sm-2">Date</dt>
+                    <dd class="col-sm-10">@meeting.Date.ToLongDateString()</dd>
+                    <dt class="col-sm-2">Time</dt>
+                    <dd class="col-sm-10">@meeting.Time</dd>
+                    <dt class="col-sm-2">Duration</dt>
+                    <dd class="col-sm-10">@meeting.Duration hr </dd>
+                    <dt class="col-sm-2">Room</dt>
+                    <dd class="col-sm-10">@room!.Name</dd>
+                </dl>
+                <CascadingValue Value="Id">
+                    <CascadingValue Value="meeting" IsFixed="true">
+                        <CascadingValue Value="roles" IsFixed="true">
+                            <CascadingValue Value="IsCreator" IsFixed="true">
+                                <UpdateMeetingComponent />
+                            </CascadingValue>
+                        </CascadingValue>
+                    </CascadingValue>
+                </CascadingValue>
+
+                <div class="mb-3">
+                    @if (IsCreator && !hasEnded && !hasStarted)
+                    {
+                        <a class="text-decoration-none me-2" href="@($"Account/Meetings/Edit?id={meeting.Id}")">
+                            Edit
+                        </a> <span class="me-2">  | </span>
+                    }
+
+                    <a class="text-decoration-none" href="@($"Account/Meetings")">Back</a>
+                </div>
+            }
+        </div>
+        
+    </div>
+}
+else
+{
+    <NotFound />
+}
+
+@code {
+    [SupplyParameterFromForm]
+    private string? selectedUser { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    Meeting? meeting;
+    private string? role { get; set; }
+    private Room? room { get; set; }
+    private List<string>? roles { get; set; }
+    private ClaimsPrincipal? claimsPrincipal { get; set; }
+    private bool IsCreator = false;
+    private bool IsAdmin = false;
+    private bool IsInvited = false;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+    [Parameter]
+    public string? color { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        meeting = await context.Meeting.FirstOrDefaultAsync(m => m.Id == Id);
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        claimsPrincipal = authState.User;
+
+        if (meeting is not null)
+        {
+            if (claimsPrincipal is not null)
+            {
+                var user = await UserManager.GetUserAsync(claimsPrincipal);
+
+                if (user is not null)
+                {
+                    IsCreator = await UserManager.IsInRoleAsync(user, "MeetingCreator" + meeting.Id);
+                    IsInvited = await UserManager.IsInRoleAsync(user, "Invitee" + meeting.Id);
+                    IsAdmin = await UserManager.IsInRoleAsync(user, "Admin");
+                }
+            }
+
+            using var roomContext = MeetingDbFactory.CreateDbContext();
+            room = await roomContext.Room.FirstOrDefaultAsync(r => r.Id == meeting.RoomId);
+
+            if (room is not null && room.Price > 0)
+            {
+                color = "aliceblue";
+            }
+            else
+            {
+                color = "whitesmoke";
+            }
+            
+            //Check if the meeting has started
+            HasStarted();
+
+            //Check if the meeting is over
+            HasEnded();
+        }
+        else
+        {
+            try
+            {
+                NavigationManager.NavigateTo("/Account/NotFound");
+            }
+            catch (NavigationException navEx)
+            {
+                var source = navEx.Source;
+            }
+        }
+    }
+    private bool hasEnded = false;
+    private void HasEnded()
+    {
+        DateOnly CurrDate = DateOnly.FromDateTime(DateTime.Now);
+        TimeOnly CurrTime = TimeOnly.FromDateTime(DateTime.Now);
+
+        if (meeting!.Date < CurrDate || (meeting!.Date == CurrDate && meeting.Time.AddHours(meeting.Duration) < CurrTime))
+        {
+            hasEnded = true;
+        }
+    }
+    private bool hasStarted = false;
+    private void HasStarted()
+    {
+        DateOnly CurrDate = DateOnly.FromDateTime(DateTime.Now);
+        TimeOnly CurrTime = TimeOnly.FromDateTime(DateTime.Now);
+
+        if (meeting!.Date == CurrDate && meeting.Time <= CurrTime)
+        {
+            hasStarted = true;
+        }
+    }
+}

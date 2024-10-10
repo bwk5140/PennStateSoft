@@ -1,0 +1,189 @@
+﻿@page "/Account/Complaints/Create"
+
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppUsersDbFactory
+@inject NavigationManager NavigationManager
+@inject UserManager<ApplicationUser> UserManager
+@inject IdentityUserAccessor UserAccessor
+@inject IRoleStore<IdentityRole> RoleStore
+@inject IRoleValidator<IdentityRole> RoleValidator
+@inject IEnumerable<RoleValidator<IdentityRole>> RoleValidators
+@inject ILogger<RoleManager<IdentityRole>> RoleLogger
+@inject IdentityErrorDescriber IdentityErrorDescriber
+@inject ILookupNormalizer KeyNormalizer
+
+@attribute [Authorize(Roles = "Client")]
+
+<PageTitle>File a complaint</PageTitle>
+<div style="align-content:baseline; width:75%">
+    <div class="ms-5 mt-3">
+        <h3>File a new complaint</h3>
+
+        <StatusMessage Message="@message" />
+        <hr />
+        <div class="row">
+            <div class="w-100 col-md-4">
+                <EditForm method="post" Model="complaint" OnValidSubmit="OnValidSubmit" FormName="file-complaint" Enhance>
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" />
+
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username:</label>
+                        <InputText id="username" @bind-Value=" complaint.Username" class="form-control" disabled />
+                        <ValidationMessage For="() => complaint.Username" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="subject" class="form-label">Subject:</label>
+                        <InputText id="title" @bind-Value="complaint.Subject" class="form-control" autofocus />
+                        <ValidationMessage For="() => complaint.Subject" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="datecreated" class="form-label">Created:</label>
+                        <InputDate id="datecreated" @bind-Value="complaint.Created" class="form-control" disabled />
+                        <ValidationMessage For="() => complaint.Created" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="dateclosed" class="form-label" hidden>DateClosed:</label>
+                        <InputDate id="dateclosed" @bind-Value="complaint.Closed" class="form-control" hidden disabled />
+                        <ValidationMessage For="() => complaint.Closed" class="text-danger" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description:</label>
+                        <InputTextArea id="description" @bind-Value="Description" class="form-control text-wrap"
+                                       rows="@uIHelper.Rows" @oninput="@(()=> uIHelper.CalculateSize(Description))" />
+                        <ValidationMessage For="() => Description" class="text-danger" />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                    <a class="btn btn-secondary ms-2" href="Account/Complaints">
+                        Cancel
+                    </a>
+                </EditForm>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private string Description { get; set; } = "";
+
+    private string? message;
+    private ApplicationUser user = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected UIHelper uIHelper = new();
+
+    private IEnumerable<IdentityError>? identityErrors;
+    private ApplicationRoleManager? RoleManager;
+
+    private IdentityRole? Role;
+    private Notification? notification;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+        complaint.Username = await UserManager.GetUserNameAsync(user);
+        complaint.Created = DateTime.Now;
+        complaint.Closed = DateTime.Now.AddDays(7);
+        uIHelper.CalculateSize(Description);
+    }
+
+    private async Task OnValidSubmit()
+    {
+
+        if (complaint.Subject is null || complaint.Subject.Length < 1)
+        {
+            message = $"Error: {string.Join(", ", "Subject is required.")}";
+            return;
+        }
+        else if (complaint.Subject.Length < 3)
+        {
+            message = $"Error: {string.Join(", ", "Subject should be at least 3 characters long.")}";
+            return;
+        }
+        if (Description is null || Description.Length < 1)
+        {
+            message = $"Error: {string.Join(", ", "Description is required.")}";
+            return;
+        }
+        else if (Description.Length < 8)
+        {
+            message = $"Error: {string.Join(", ", "Description is too short.")}";
+            return;
+        }
+
+        complaint.Description = Encoding.ASCII.GetBytes(Description);
+        await AddComplaint();
+    }
+
+    [SupplyParameterFromForm]
+    public Complaint complaint { get; set; } = new();
+
+    private async Task CreateRole(ApplicationUser authUser, string roleName)
+    {
+        //Create the Role
+        RoleManager = new ApplicationRoleManager(RoleStore, RoleValidators, KeyNormalizer, IdentityErrorDescriber, RoleLogger);
+        Role = await RoleManager.FindByNameAsync(roleName).ConfigureAwait(false);
+
+        if (Role == null)
+        {
+            Role = new IdentityRole(roleName);
+            var roleResult = await RoleManager.CreateAsync(Role);
+        }
+        var result = await UserManager.AddToRoleAsync(authUser, Role.Name!);
+
+        //Check if UserRole was added successfully
+        if (!result.Succeeded)
+        {
+            identityErrors = result.Errors;
+            return;
+        }
+    }
+    private async Task CreateNotification()
+    {
+        using var context = AppUsersDbFactory.CreateDbContext();
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+        var adminUserRoles = context.UserRoles.Where(Ur => Ur.RoleId == adminRole!.Id);
+
+        foreach (var adminUserRole in adminUserRoles)
+        {
+            var recipientAccts = context.Users.Where(u => u.Id == adminUserRole.UserId).ToList();
+            foreach (var adminAcc in recipientAccts)
+            {
+                notification = new Notification
+                    {
+                        ReferenceID = complaint.Id,
+                        Author = user!.UserName,
+                        UserId = adminAcc.Id,
+                        Recipient = adminAcc.UserName,
+                        Message = "filed a new complaint, ",
+                        Link = $"/Account/Complaints/Details?id={complaint.Id}",
+                        LinkTo = $"{complaint.Subject}",
+                        Read = false
+                    };   
+                await AddNotification(notification);
+            }
+        }
+        
+    }
+    public async Task AddNotification(Notification notification)
+    {
+        using var context = AppUsersDbFactory.CreateDbContext();
+        context.Notifications.Add(notification);
+        await context.SaveChangesAsync();
+    }
+
+    // To protect from overposting attacks, see https://aka.ms/RazorPagesCRUD
+    public async Task AddComplaint()
+    {
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        context.Complaint.Add(complaint);
+        await context.SaveChangesAsync();
+        await CreateNotification();
+        await CreateRole(user!, "ComplaintAuthor" + complaint!.Id.ToString());
+        NavigationManager.NavigateTo("/Account/Complaints");
+    }
+}

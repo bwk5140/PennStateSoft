@@ -1,0 +1,20 @@
+﻿h3 {
+    padding-bottom: 15px;
+    font-family: 'Tahoma';
+    font-weight: bold;
+    background: linear-gradient(to bottom, #003366, #0073e6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-fill-color: transparent;
+}
+.icon1 {
+    display: inline-block;
+    width: 1.0em;
+    height: 1.0em;
+    margin-top: -8px;
+    background-image: url("UploadProfilePicIcon.svg");
+    background-size: contain;
+    background-repeat: no-repeat;
+    vertical-align: middle;
+}

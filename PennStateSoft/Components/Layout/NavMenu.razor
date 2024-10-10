@@ -1,0 +1,113 @@
+﻿@implements IDisposable
+
+@inject NavigationManager NavigationManager
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppDbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid d-flex justify-content-between align-items-center" style="height: 1.9rem;">
+        <a class="navbar-brand d-flex align-items-center" href="">
+            <span class="brand-text">PennStateSoft</span>
+        </a>
+        <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable bg-white" stonclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column text-black">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span>Home
+            </NavLink>
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Manage">
+                        @if (ProfilePic != null)
+                        {
+                            <img style="width:30px; left:-5px; height:30px; margin-right: 5px; object-fit:cover; border-radius:30px"
+                                 src="data:image/*;base64,@Convert.ToBase64String(ProfilePic)">
+                        }
+                        else
+                        {
+                            <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span>
+                        }
+                        @context.User.Identity?.Name
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Complaints">
+                        <span class="bi complaintIcon" aria-hidden="true"></span>Complaints
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Meetings">
+                        <span class="bi meetingIcon" aria-hidden="true"></span>Meetings
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                        <button type="submit" class="nav-link">
+                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
+                        </button>
+                    </form>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Register">
+                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Login">
+                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+@code {
+    private string? currentUrl;
+    private byte[]? ProfilePic;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var claimsPrincipal = authState.User;
+
+        if (authState.User.Identity!.IsAuthenticated)
+        {
+            if (claimsPrincipal is not null)
+            {
+                var userName = claimsPrincipal.Identity?.Name;
+                using var context = await AppDbFactory.CreateDbContextAsync();
+                var user = await context.Users.FirstOrDefaultAsync(u => u.UserName == userName);
+                ProfilePic = user?.ProfilePic;
+            }
+        }       
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

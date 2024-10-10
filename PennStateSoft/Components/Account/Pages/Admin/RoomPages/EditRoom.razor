@@ -1,0 +1,106 @@
+﻿@page "/Account/Admin/Rooms/Edit"
+
+@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+@attribute [Authorize(Roles = "Admin")]
+<PageTitle>Edit</PageTitle>
+
+@if (Room is null)
+{
+    <h3>Edit Room</h3>
+    <hr style="width:60%;" />
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <h3>Edit @Room.Name</h3>
+    <hr style="width:60%;"/>
+    <div class="row">
+        <div class="col-md-4">
+            <EditForm method="post" Model="Room" OnValidSubmit="UpdateRoom" FormName="edit-room" Enhance>
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <input type="hidden" name="Room.Id" value="@Room.Id" />
+                <div class="mb-3">
+                    <label for="name" class="form-label">Name:</label>
+                    <InputText id="name" @bind-Value="Room.Name" class="form-control" />
+                    <ValidationMessage For="() => Room.Name" class="text-danger" />
+                </div>
+                <div class="mb-3">
+                    <label for="capacity" class="form-label">Capacity:</label>
+                    <InputNumber id="capacity" @bind-Value="Room.Capacity" class="form-control" />
+                    <ValidationMessage For="() => Room.Capacity" class="text-danger" />
+                </div>
+                <div class="mb-3">
+                    <label for="price" class="form-label">Price ($/hr):</label>
+                    <InputNumber id="price" @bind-Value="Room.Price" class="form-control" />
+                    <ValidationMessage For="() => Room.Price" class="text-danger" />
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="reset" class="btn btn-secondary ms-2" @onclick="Cancel">
+                    Cancel
+                </button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    [SupplyParameterFromForm]
+    public Room? Room { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        Room ??= await context.Room.FirstOrDefaultAsync(m => m.Id == Id);
+
+        if (Room is null)
+        {
+            NavigationManager.NavigateTo("Account/NotFound");
+        }
+    }
+
+    // To protect from overposting attacks, enable the specific properties you want to bind to.
+    // For more details, see https://aka.ms/RazorPagesCRUD.
+    public async Task UpdateRoom()
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        context.Attach(Room!).State = EntityState.Modified;
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!RoomExists(Room!.Id))
+            {
+                NavigationManager.NavigateTo("Account/NotFound");
+            }
+            else
+            {
+                throw;
+            }
+        }
+
+        NavigationManager.NavigateTo("Account/Admin/Rooms");
+    }
+    public void Cancel()
+    {
+        NavigationManager.NavigateTo($"Account/Admin/Rooms/Details?id={Room?.Id}");
+    }
+
+    bool RoomExists(int id)
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        return context.Room.Any(e => e.Id == id);
+    }
+}

@@ -1,0 +1,13 @@
+﻿@page "/auth"
+
+@attribute [Authorize]
+
+<PageTitle>Auth</PageTitle>
+
+<AuthorizeView>
+    @context.User.Identity?.Name
+</AuthorizeView>
+
+@code{
+    AuthorizeAttribute? authorize { get; set; }
+}

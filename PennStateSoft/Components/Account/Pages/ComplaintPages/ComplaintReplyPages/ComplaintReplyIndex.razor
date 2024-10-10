@@ -1,0 +1,42 @@
+﻿@attribute [Route(route)]
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@attribute [Authorize]
+
+
+<QuickGrid ItemsProvider="@ComplaintReplyGridProvider" Theme="chat">
+    <TemplateColumn Context="complaintreply" Align="Align.Right"> 
+        <CascadingValue Value="Complaint" IsFixed="true">
+            <CascadingValue Value="@complaintreply" IsFixed="true">
+                <ComplaintReplyDetails OnSaveCallback="UpdateGridProvider" />
+            </CascadingValue>
+        </CascadingValue>
+    </TemplateColumn>
+</QuickGrid>
+
+@code{
+
+    PaginationState paginationState = new PaginationState { ItemsPerPage = 10 };
+    private const string route = "/Account/Complaints/Details/ComplaintReplies";
+    GridItemsProvider<ComplaintReply>? ComplaintReplyGridProvider;
+
+    [CascadingParameter]
+    private Complaint? Complaint { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        if (Complaint is not null)
+        {
+            var rows = Complaint.ComplaintReplies;
+            UpdateGridProvider(rows);
+        }
+    }
+    private void UpdateGridProvider(SaveChangesEventArgs eventArgs)
+    {
+        UpdateGridProvider(Complaint.ComplaintReplies);
+    }
+    private void UpdateGridProvider(List<ComplaintReply> replies)
+    {
+        var result = GridItemsProviderResult.From<ComplaintReply>(items: replies!, totalItemCount: replies!.Count);
+        ComplaintReplyGridProvider = req => ValueTask.FromResult(result);
+    }
+}

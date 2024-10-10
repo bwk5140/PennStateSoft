@@ -1,0 +1,15 @@
+﻿.mb-3 {
+    width: auto;
+    height: auto;
+    white-space: nowrap;
+}
+
+span.weak{
+    color: grey;
+    padding: 4px;
+}
+
+p {
+    color: grey;
+}
+

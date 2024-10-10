@@ -1,0 +1,136 @@
+﻿@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject NavigationManager NavigationManager
+
+@attribute [Authorize]
+<div>
+    @if (NotificationsProvider is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        @if (ExistingUnreadNotifications)
+        {
+            <p3>
+                <QuickGrid Class="table" ItemsProvider="@NotificationsProvider">
+                    <TemplateColumn Context="notification">
+                        <CascadingValue Value="notification">
+                            <CascadingValue Value="notifications">
+                                <CascadingValue Value="User" IsFixed="true">
+                                    <HomePageNotificationDetails/>
+                                </CascadingValue>
+                            </CascadingValue>
+                        </CascadingValue>
+                    </TemplateColumn>
+                </QuickGrid>
+            </p3>
+        }
+        else
+        {
+            <p class="ms-1">No new notifications.</p>
+        }
+    }
+</div>
+
+@code {
+    GridItemsProvider<Notification>? NotificationsProvider;
+    private List<Notification>? notifications;
+
+    private string? UserName;
+    private bool IsAdmin = false;
+    private bool IsComplaintAuthor = false;
+    private bool ExistingUnreadNotifications = true;
+    private ComplaintReply? complaintReply;
+
+    [CascadingParameter]
+    public ApplicationUser? User { get; set; } = default!;
+
+    List<IdentityRole>? Roles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (User is not null)
+        {
+            using var context = AppDbFactory.CreateDbContext();
+
+            UserName = User.UserName;
+            using var appContext = await AppDbFactory.CreateDbContextAsync();
+
+            //Get the users roles
+            var userRoles = appContext.UserRoles.Where(ur => ur.UserId == User.Id);
+            Roles = new List<IdentityRole>();
+
+            if (userRoles is not null)
+            {
+                foreach (var userRole in userRoles)
+                {
+                    var role = await appContext.Roles.FirstOrDefaultAsync(r => r.Id == userRole.RoleId);
+                    Roles.Add(role!);
+                }
+            }
+            if (Roles.FirstOrDefault(r => r.Name == "Admin") is not null)
+            {
+                IsAdmin = true;
+            }
+
+            var Notifications = context.Notifications.
+                Where(n => n.Author != User.UserName && (n.Recipient == User.UserName)).ToList();
+            notifications = Notifications;
+            notifications = notifications.Where(n => n.Read == false).ToList();
+        }
+
+        if (notifications is not null)
+        {
+            notifications = notifications.OrderByDescending(n => n.Created).ToList();
+            notifications = notifications.Take(2).ToList();
+
+            if (notifications is null || notifications.Count <= 0)
+            {
+                ExistingUnreadNotifications = false;
+            }
+            var Result = GridItemsProviderResult.From<Notification>(items: notifications, totalItemCount: notifications.Count);
+            NotificationsProvider = request => ValueTask.FromResult(Result);
+        }
+    }
+    
+    public async Task UpdateNotification(Notification notification)
+    {
+        using var context = AppDbFactory.CreateDbContext();
+        context.Attach(notification!).State = EntityState.Modified;
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!NotificationExists(notification!.Id))
+            {
+                NavigationManager.NavigateTo("Account/NotFound");
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
+
+    bool NotificationExists(int id)
+    {
+        using var context = AppDbFactory.CreateDbContext();
+        return context.Notifications.Any(e => e.Id == id);
+    }
+
+    private void UpdateGridProvider()
+    {
+        UpdateGridProvider(notifications!);
+    }
+    private void UpdateGridProvider(List<Notification> notifications)
+    {
+        var result = GridItemsProviderResult.From<Notification>(items: notifications!, totalItemCount: notifications!.Count);
+        NotificationsProvider = req => ValueTask.FromResult(result);
+    }
+}
+

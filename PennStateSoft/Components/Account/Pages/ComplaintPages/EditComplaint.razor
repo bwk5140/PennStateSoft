@@ -1,0 +1,65 @@
+﻿@page "/Account/Complaints/Edit"
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject NavigationManager NavigationManager
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Roles = "Client")]
+
+<PageTitle>Edit Complaint</PageTitle>
+
+
+@if (UserName == Complaint?.Username)
+{
+    <CascadingValue Value="Id">
+        <EditComplaintForm />
+    </CascadingValue>
+}
+else
+{
+    <NotFound/>
+}
+@code {
+    private string? UserName;
+    private ApplicationUser user = default!;
+    private ClaimsPrincipal? claimsPrincipal;
+
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    public Complaint? Complaint { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        Complaint ??= await context.Complaint.FirstOrDefaultAsync(m => m.Id == Id);
+
+        if (Complaint is null)
+        {
+            try
+            {
+                NavigationManager.NavigateTo("Account/NotFound");
+            }
+            catch (NavigationException ex)
+            {
+                var source = ex.Source;
+            }
+        }
+        else
+        {
+            var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
+            claimsPrincipal = authenticationState.User;
+
+            if (claimsPrincipal is not null)
+            {
+                user = await UserManager.GetUserAsync(claimsPrincipal);
+
+            }
+            if (user is not null)
+            {
+                UserName = user.UserName;
+            }
+        }
+    }
+}
+

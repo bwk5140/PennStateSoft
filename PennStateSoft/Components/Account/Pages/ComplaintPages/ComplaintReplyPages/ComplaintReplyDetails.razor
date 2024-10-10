@@ -1,0 +1,277 @@
+﻿@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppDbFactory
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject IRoleStore<IdentityRole> RoleStore
+@inject IRoleValidator<IdentityRole> RoleValidator
+@inject IEnumerable<RoleValidator<IdentityRole>> RoleValidators
+@inject ILogger<RoleManager<IdentityRole>> RoleLogger
+@inject IdentityErrorDescriber IdentityErrorDescriber
+@inject ILookupNormalizer KeyNormalizer
+
+@attribute [Authorize]
+
+<div>
+    @if (ComplaintReply is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div id="complaint_reply" class="m-3">
+            <div class="m-3">
+                <img src=@imageSource class="ms-1" 
+                    style="width:30px; height:30px; margin-right: 5px; object-fit:cover; border-radius:30px;" />
+                @if (IsAdmin)
+                {
+                    <label class=" form-label ms-2" style="color:#0070E0"> @ComplaintReply.Username </label>
+                    <label class=" form-label m-2 me-5 text-black-50" style="color:#0070E0"> (Admin) </label>
+                }
+                else
+                {
+                    <label class=" form-label m-2 me-5 ms-2" style="color:#0070E0"> @ComplaintReply.Username </label>
+                }
+                <label class="form-label text-black-50" style="text-align:right; width:60%;">
+                    @ComplaintReply.Created.ToLongDateString() at
+                    @ComplaintReply.Created.ToShortTimeString()
+                </label>
+                @if (!EditClicked)
+                {
+                    <div class="m-1 ms-5">
+                        <textarea class="text-black text-wrap" cols="100"
+                                  style="border:none; background-color:whitesmoke;" disabled>
+                            @Encoding.ASCII.GetString(ComplaintReply!.Description!)
+                                                    </textarea>
+                    </div>
+                }
+                @if (!UserName!.Equals(ComplaintReply.Username) && !EditClicked)
+                {
+                    <div class="ms-5">
+                        <CascadingValue Value="ComplaintReply" IsFixed="true">
+                            <CreateComplaintReplyReply OnSaveNewReplyCallback="OnSaveClicked" />
+                        </CascadingValue>
+                    </div>
+                }
+                @if (UserName!.Equals(ComplaintReply.Username) && !EditClicked)
+                {
+                    <div class="ms-5">
+                        <button id="edit" type="button" class="btn btn-primary text-primary" style="border:none; background:inherit;"
+                                @onclick="OnEditClicked">
+                            Edit
+                        </button> |
+
+                        <button id="delete" type="submit" class="btn btn-danger text-danger" disabled="@(ComplaintReply is null)"
+                                style="border:none; background:inherit;" @onclick="DeleteComplaintReply">
+                            Delete
+                        </button>
+                    </div>
+                    <hr />
+                }
+                @if (EditClicked)
+                {
+                    <form method="post" Model="@ComplaintReply" @onsubmit="UpdateComplaintReply" @formname="edit-complaintreply">
+                        <AntiforgeryToken />
+                        <div class="m-1 ms-5">
+                            <textarea id="description" @bind="Description" @bind:event="oninput" class="text-black text-wrap" cols="100"
+                                      style="border:none; background-color:Window;" autofocus>
+                                @Encoding.ASCII.GetString(ComplaintReply!.Description!)
+                                        </textarea>
+                        </div>
+                        <div class="m-1 ms-5">
+                            <button type="submit" class="btn btn-primary">Save </button>
+                            <button type="button" class="btn btn-secondary" @onclick="OnEditClicked">Cancel</button>
+                        </div>
+                    </form>
+                    <hr />
+                }
+                @if (ComplaintReply is not null && ComplaintReply.Replies is not null && ComplaintReply.Replies.Count() > 0)
+                {
+                    @if (SeeReplies)
+                    {
+                        @if (ComplaintReply.Replies.Count() == 1)
+                        {
+                            SeeHideReplies = "Hide " + ComplaintReply.Replies.Count() + " reply";
+                        }
+                        else
+                        {
+                            SeeHideReplies = "Hide " + ComplaintReply.Replies.Count() + " replies";
+                        }
+                    }
+                    else
+                    {
+                        @if (ComplaintReply.Replies.Count() == 1)
+                        {
+                            SeeHideReplies = "See " + ComplaintReply.Replies.Count() + " reply";
+                        }
+                        else
+                        {
+                            SeeHideReplies = "See " + ComplaintReply.Replies.Count() + " replies";
+                        }
+                    }
+                    <div class="ms-4">
+                        <button class="btn-link ms-4 text-decoration-none" @onclick=OnClickSeeReplies style="border:none;
+                                   background-color:whitesmoke;">
+                            @SeeHideReplies
+                        </button>
+                    </div>
+                }
+                @if (SeeReplies)
+                {
+                    <div id="replyreplies" class="ms-3">
+                        <CascadingValue Value="complaint">
+                            <CascadingValue Value="ComplaintReply">
+                                <ComplaintReplyReplyIndex />
+                            </CascadingValue>
+                        </CascadingValue>
+                    </div>
+                }  
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<SaveChangesEventArgs> OnSaveCallback { get; set; }
+
+    [CascadingParameter]
+    Complaint? complaint { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    public int replyId { get; set; }
+
+    [SupplyParameterFromForm]
+    private string? Description { get; set; }
+
+    [CascadingParameter]
+    public ComplaintReply? ComplaintReply { get; set; } = default!;
+
+    [Parameter]
+    public string? imageSource { get; set; }
+
+    private UIHelper UIhelper = new();
+
+    [CascadingParameter]
+    public bool EditClicked { get; set; } = default!;
+
+    private ApplicationUser? User;
+    private bool IsAdmin = false;
+
+    private bool SeeReplies = false;
+    private string? SeeHideReplies;
+
+    private ClaimsPrincipal? claimsPrincipal { get; set; }
+
+    private string? UserName { get; set; }
+
+    private ApplicationRoleManager? RoleManager;
+    private IdentityRole? Role;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ComplaintReply is null)
+        {
+            try
+            {
+                NavigationManager.NavigateTo("/Account/NotFound");
+            }
+            catch (NavigationException ex)
+            {
+                var source = ex.Source;
+            }
+        }
+        else
+        {
+            //Get the logged in user
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            claimsPrincipal = authState.User;
+            UserName = claimsPrincipal.Identity.Name;
+
+            //Check if the reply creator is an admin
+            using var context = await AppDbFactory.CreateDbContextAsync();
+            User = await context.Users.FirstOrDefaultAsync(u => u.UserName == ComplaintReply.Username);
+            if (User?.ProfilePic is not null)
+            {
+                imageSource = string.Format("data:image/jpg;base64,{0}", Convert.ToBase64String(User.ProfilePic));
+            }
+            var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+            var userRole = await context.UserRoles.FirstOrDefaultAsync(ur => ur.RoleId == adminRole.Id && ur.UserId == User.Id);
+
+            using var replyContext = await ComplaintsDbFactory.CreateDbContextAsync();
+            ComplaintReply.Replies = replyContext.ComplaintReplyReply.Where(c => c.ComplaintReplyId == ComplaintReply.Id).ToList<ComplaintReplyReply>();
+
+            if (userRole is not null)
+            {
+                IsAdmin = true;
+            }
+        }
+    }
+    private void OnEditClicked()
+    {
+        EditClicked = !EditClicked;
+    }
+    private async Task OnSaveClicked()
+    {
+        await OnSaveCallback.InvokeAsync();
+    }
+    public async Task UpdateComplaintReply()
+    {
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        context.Attach(ComplaintReply!).State = EntityState.Modified;
+
+        if (Description is not null)
+        {
+            ComplaintReply!.Description = Encoding.ASCII.GetBytes(Description);
+        }
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!ComplaintReplyExists(ComplaintReply!.Id))
+            {
+                NavigationManager.NavigateTo("notfound");
+            }
+            else
+            {
+                throw;
+            }
+        }
+        OnEditClicked();
+        await OnSaveCallback.InvokeAsync();
+    }
+    private async Task RemoveRole(ComplaintReply complaintReply)
+    {
+        RoleManager = new ApplicationRoleManager(RoleStore, RoleValidators, KeyNormalizer, IdentityErrorDescriber, RoleLogger);
+
+        if (complaint is not null && complaintReply is not null)
+        {
+            Role = await RoleManager.FindByNameAsync("ComplaintReplyAuthor" + complaint!.Id + "_" + complaintReply.Id).ConfigureAwait(false);
+            var result = await RoleManager.DeleteAsync(Role!);
+        }
+    }
+    private void OnClickSeeReplies()
+    {
+        SeeReplies = !SeeReplies;
+    }
+
+    public async Task DeleteComplaintReply()
+    {
+        await RemoveRole(ComplaintReply!);
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        context.ComplaintReply.Remove(ComplaintReply!);
+        context.Attach(complaint!).State = EntityState.Modified;
+        await context.SaveChangesAsync();
+        OnEditClicked();
+        await OnSaveCallback.InvokeAsync();
+    }
+
+    bool ComplaintReplyExists(int id)
+    {
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        return context.ComplaintReply.Any(e => e.Id == id);
+    }
+}

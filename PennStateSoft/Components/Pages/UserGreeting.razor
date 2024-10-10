@@ -1,0 +1,8 @@
+﻿@attribute [Authorize]
+
+<h4>
+<AuthorizeView>
+    Hello,
+    @context.User.Identity?.Name
+</AuthorizeView>
+</h4>

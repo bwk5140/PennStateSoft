@@ -1,0 +1,440 @@
+﻿@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppDb
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject IRoleStore<IdentityRole> RoleStore
+@inject IRoleValidator<IdentityRole> RoleValidator
+@inject IEnumerable<RoleValidator<IdentityRole>> RoleValidators
+@inject ILogger<RoleManager<IdentityRole>> RoleLogger
+@inject IdentityErrorDescriber IdentityErrorDescriber
+@inject ILookupNormalizer KeyNormalizer
+@rendermode InteractiveServer
+
+@attribute [Authorize]
+
+<dl class="row" style="width:65%;">
+    <div style="text-align:right;">
+        @if (!AddMembersClicked)
+        {
+            @if (IsCreator && !hasEnded)
+            {
+                <button style="background-color:#4969ee; color:white; border-radius:0.25rem;"
+                        @onclick="OnAddClicked">
+                    Add
+                </button>
+            }
+        }
+        @if (AddMembersClicked)
+        {
+            <div class="text-danger">
+                @statusMessage
+            </div>
+            @if (memberAdded)
+            {
+                <p class="text-success mt-1">
+                    @member!.UserName was added to the meeting.
+                </p>
+                memberAdded = false;
+            }
+            <form method="post" Model="@meeting" @onsubmit="@(()=> AddSelectedMember(selectedUser!))" @formname="add-attendees">
+                <AntiforgeryToken/>
+                <div class="mb-3">
+                    <div style="text-align:left;">
+                        <label for="user" class="form-label">Add people to the meeting:</label>
+                    </div>
+                    <InputSelect id="user" @bind-Value="selectedUser" class="form-select">
+                        @if (_users is not null)
+                        {
+                            foreach (var appUser in _users)
+                            {
+                                <option class="ms-3" value="@appUser">@appUser.UserName</option>
+                            }
+                        }
+                    </InputSelect>
+                    <button type="submit" class="btn btn-primary mt-2">
+                        Add
+                    </button>
+                    <a class="btn btn-secondary ms-2 mt-2" @onclick="OnAddClicked">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        }
+    </div>
+    @if (MemberRemovedNotify)
+    {
+        <p class="text-success">
+            @MemberRemovedNotification
+        </p>
+        MemberRemovedNotify = false;
+    }
+    @if (RemoveErrorNotify)
+    {
+        <p class="text-danger">
+            @MemberRemovedError
+        </p>
+        RemoveErrorNotify = false;
+    }
+
+    <QuickGrid Class="table" ItemsProvider="@gridItemsProvider">
+        <TemplateColumn Context="member" Title="Members">
+            <div class="flex items-center mt-1">
+                <img style="width:30px; height:30px; margin-right: 5px; object-fit:cover; border-radius:30px"
+                     src="data:image/*;base64,@Convert.ToBase64String(member?.ProfilePic!)">
+                <nobr style="color:#0070E0;">
+                    @member?.UserName
+                </nobr>
+            </div>
+        </TemplateColumn>
+        <TemplateColumn Context="member">
+            @if (IsCreator && !hasEnded)
+            {
+                <button class="btn btn-sm ms-3 btn-danger" style="padding:0.2rem 1rem; color:white; border-radius:0.25rem;
+                        margin:0.25rem 0.5rem;"
+                        @onclick="@(()=> OnRemoveClicked(member))">
+                    Remove
+                </button>
+            }
+        </TemplateColumn>
+    </QuickGrid>
+</dl>
+
+@code 
+{
+    [CascadingParameter]
+    Meeting? meeting { get; set; }
+
+    [CascadingParameter]
+    private List<string>? roles { get; set; }
+
+    private string? role { get; set; }
+
+    [CascadingParameter]
+    public int Id { get; set; }
+
+    private IEnumerable<IdentityError>? identityErrors;
+    private ApplicationRoleManager? RoleManager;
+    private IdentityRole? Role;
+    private IdentityRole? AdminRole;
+    private IdentityUserRole<string>? userRole;
+    private IdentityUserRole<string>[]? UserRoles { get; set; }
+    private List<MeetingMember>? members { get; set; }
+    private List<ApplicationUser>? Members { get; set; }
+    private List<ApplicationUser>? users { get; set; }
+    private List<ApplicationUser>? _users { get; set; }
+    private ApplicationUser? User { get; set; }
+    private ApplicationUser? member { get; set; }
+    private ClaimsPrincipal? claimsPrincipal { get; set; }
+
+    [Parameter]
+    public GridItemsProvider<ApplicationUser>? gridItemsProvider { get; set; }
+
+    [SupplyParameterFromForm]
+    private string? selectedUser { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int RoomId { get; set; }
+
+    [CascadingParameter]
+    private bool IsCreator { get; set; } = default!;
+
+    private bool memberAdded { get; set; } = false;
+    private string? statusMessage { get; set; } = "";
+    private string? MemberRemovedNotification { get; set; } = "";
+    private string? MemberRemovedError { get; set; } = "";
+    private bool RemoveErrorNotify { get; set; } = false;
+    private bool MemberRemovedNotify { get; set; } = false;
+    private Notification? notification;
+
+    private Room? room { get; set; }
+    private bool AddMembersClicked = false;
+    private bool hasEnded = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (meeting is not null)
+        {
+            var AuthState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var ClaimsPrinciple = AuthState.User;
+            User = await UserManager.GetUserAsync(ClaimsPrinciple);
+
+            role = "MeetingCreator" + meeting.Id.ToString();
+
+            using var roomContext = MeetingDbFactory.CreateDbContext();
+            room = await roomContext.Room.FirstOrDefaultAsync(r => r.Id == meeting.RoomId);
+
+            using var context = await AppDb.CreateDbContextAsync();
+            //Get all registered app users
+            users = context.Users.AsEnumerable<ApplicationUser>().ToList();
+            _users = new List<ApplicationUser>();
+
+            //Get all userRoles
+            UserRoles = context.UserRoles.AsEnumerable<IdentityUserRole<string>>().ToArray();
+
+            //Get admin role object
+            AdminRole = context.Roles.FirstOrDefault(r => r.Name == "Admin");
+
+            //Initialize the role manager
+            RoleManager = new ApplicationRoleManager(RoleStore, RoleValidators, KeyNormalizer, IdentityErrorDescriber, RoleLogger);
+
+            foreach (var user in users)
+            {
+                //Add non-admin members to the dropdown list of members
+                if (UserRoles!.FirstOrDefault(u => u.UserId == user.Id && u.RoleId == AdminRole!.Id) is null)
+                {
+                    _users.Add(user);
+                }
+            }
+
+            SetGridItemsProvider();
+            HasEnded();
+        }
+        else
+        {
+            try
+            {
+                NavigationManager.NavigateTo("/Account/NotFound");
+            }
+            catch (NavigationException navEx)
+            {
+                var source = navEx.Source;
+            }
+        }
+    }
+    private void OnAddClicked()
+    {
+        AddMembersClicked = !AddMembersClicked;
+        statusMessage = "";
+    }
+    public void Cancel()
+    {
+        NavigationManager.NavigateTo($"Account/Meetings/Details?id={meeting?.Id}");
+    }
+
+    private async Task OnRemoveClicked(ApplicationUser member)
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        var meetingMember = context.Members.FirstOrDefault(m => m.UserId == member.Id && m.MeetingId == meeting!.Id);
+
+        if (meetingMember is not null)
+        {
+            await CreateDeleteNotification(meetingMember);
+            context.Remove<MeetingMember>(meetingMember!);
+            await context.SaveChangesAsync();
+            await RemoveFromRole(member, "Invitee" + meeting!.Id);
+            MemberRemovedNotification = $"{member.UserName} has been removed.";
+            MemberRemovedNotify = true;
+            await SetGridItemsProvider();
+        }
+    }
+    private async Task SetGridItemsProvider()
+    {
+        using var context = MeetingDbFactory.CreateDbContext();
+        members = context.Members.Where(m => m.MeetingId == meeting!.Id).ToList();
+
+        Members = new List<ApplicationUser>();
+
+        using var appContext = await AppDb.CreateDbContextAsync();
+        if (members is not null)
+        {
+            foreach (var member in members)
+            {
+                var user = appContext.Users.FirstOrDefault(u => u.Id == member.UserId);
+                if (user is not null)
+                {
+                    Members.Add(user);
+                }
+            }
+        }
+        var result = GridItemsProviderResult.From<ApplicationUser>(items: Members!, totalItemCount: Members!.Count);
+        gridItemsProvider = req => ValueTask.FromResult(result);
+    }
+    private async Task AddSelectedMember(string UserName)
+    {
+        //Check if user is in any other meetings.
+        using var MemberContext = MeetingDbFactory.CreateDbContext();
+        members = MemberContext.Members.ToList();
+
+        member = users!.FirstOrDefault(u => u.UserName == UserName);
+
+        if (member is null)
+        {
+            //Get the first user in the dropdown if user wasn't selected
+            member = _users!.First();
+            UserName = member.UserName!;
+        }
+
+        //Get the meeting members that match current App user
+        members = members.Where(m => m.UserId == member.Id).ToList();
+
+        //Check if current user is in any meetings currently ongoing
+        if (IsMemberInAMeeting(UserName))
+        {
+            //Only add users not in any meetings currently
+            return;
+        }
+        //Add members that have not been added already
+        if (MemberContext.Members.FirstOrDefault(m => m.UserId == member.Id && m.MeetingId == meeting!.Id) is null)
+        {
+            var _member = new MeetingMember();
+            _member.UserId = member.Id;
+            _member.MeetingId = meeting!.Id;
+            MemberContext.Add(_member);
+            await CreateNotification(_member);
+            await MemberContext.SaveChangesAsync();
+            await AddToRole(member, "Invitee" + meeting.Id);
+            statusMessage = "";
+            memberAdded = true;
+            await SetGridItemsProvider();
+        }
+        else
+        {
+            statusMessage = $"Error: {UserName} has already been added to {meeting!.Name}";
+            memberAdded = false;
+        }
+    }
+    private bool IsMemberInAMeeting(string UserName)
+    {
+        if (members is not null)
+        {
+            using var MeetingContext = MeetingDbFactory.CreateDbContext();
+
+            //Get the meetings currently ongoing
+            var Meetings = MeetingContext.Meeting.ToList<Meeting>();
+            var CurrDate = DateOnly.FromDateTime(DateTime.Now);
+            var CurrTime = TimeOnly.FromDateTime(DateTime.Now);
+
+            Meetings = Meetings.Where(m => m.Date == CurrDate && m.Time <= CurrTime &&
+                m.Time.AddHours(meeting!.Duration) >= CurrTime).ToList<Meeting>();
+
+            if (Meetings.Count() > 0)
+            {
+                foreach (var _meeting in Meetings)
+                {
+                    if (members.FirstOrDefault(m => m.MeetingId == _meeting.Id) is not null)
+                    {
+                        //Show error if the planned meeting conflicts with current meetings
+                        if (meeting!.Date == CurrDate && meeting.Time.AddHours(meeting.Duration) >= CurrTime)
+                        {
+                            statusMessage = $"Error: Cannot add {UserName} to {meeting!.Name}. {UserName} has a conflicting schedule.";
+                            memberAdded = false;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    private async Task AddToRole(ApplicationUser authUser, string roleName)
+    {
+        //Create the Role
+        Role = await RoleManager!.FindByNameAsync(roleName).ConfigureAwait(false);
+
+        if (Role == null)
+        {
+            Role = new IdentityRole(roleName);
+            var roleResult = await RoleManager.CreateAsync(Role);
+        }
+        var UserRole = new IdentityUserRole<string>();
+        UserRole.UserId = authUser.Id;
+        UserRole.RoleId = Role.Id;
+        using var context = await AppDb.CreateDbContextAsync();
+        var result = await context.UserRoles.AddAsync(UserRole);
+        await context.SaveChangesAsync();
+    }
+    private async Task RemoveFromRole(ApplicationUser authUser, string roleName)
+    {
+        //Get the Role
+        Role = await RoleManager!.FindByNameAsync(roleName).ConfigureAwait(false);
+
+        if (Role != null)
+        {
+            using var context = await AppDb.CreateDbContextAsync();
+            var UserRole = await context.UserRoles.FirstOrDefaultAsync(ur => ur.UserId == authUser.Id && ur.RoleId == Role.Id);
+            if (UserRole is not null)
+            {
+                var result = context.UserRoles.Remove(UserRole);
+                await context.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            return;
+        }  
+    }
+    private async Task CreateNotification(MeetingMember member)
+    {
+        using var context = AppDb.CreateDbContext();
+
+        if (member.UserId != User!.Id)
+        {
+            var UserMember = await context.Users.FirstOrDefaultAsync(u => u.Id == member.UserId);
+
+            //Notify meeting attendee
+            notification = new Notification
+                {
+                    ReferenceID = meeting!.Id,
+                    Author = User!.UserName,
+                    UserId = UserMember!.Id,
+                    Recipient = UserMember!.UserName,
+                    Message = "invited you to the meeting ",
+                    Link = $"/Account/Meetings/Details?id={meeting.Id}",
+                    LinkTo = $"{meeting.Name}",
+                    Read = false
+                };
+            await AddNotification(notification);
+        }
+    }
+    private async Task CreateDeleteNotification(MeetingMember member)
+    {
+        using var context = AppDb.CreateDbContext();
+
+        if (member.UserId != User!.Id)
+        {
+            var UserMember = await context.Users.FirstOrDefaultAsync(u => u.Id == member.UserId);
+
+            //Notify meeting attendee
+            notification = new Notification
+                {
+                    ReferenceID = meeting!.Id,
+                    Author = User!.UserName,
+                    UserId = UserMember!.Id,
+                    Recipient = UserMember!.UserName,
+                    Message = "removed you from the meeting ",
+                    Link = $"/Account/Meetings/Details?id={meeting.Id}",
+                    LinkTo = $"{meeting.Name}",
+                    Read = false
+                };
+            await AddNotification(notification);
+        }
+    }
+    public async Task AddNotification(Notification notification)
+    {
+        using var context = AppDb.CreateDbContext();
+        context.Notifications.Add(notification);
+        await context.SaveChangesAsync();
+    }
+    private async Task DeleteNotification(MeetingMember member)
+    {
+        using var context = AppDb.CreateDbContext();
+
+        var UserMember = await context.Users.FirstOrDefaultAsync(u => u.Id == member.UserId);
+        var notification = await context.Notifications
+                        .FirstOrDefaultAsync(n => n.LinkTo == meeting!.Name && n.Recipient == UserMember!.UserName);
+
+        context.Notifications.Remove(notification!);
+        await context.SaveChangesAsync();
+    }
+    private void HasEnded()
+    {
+        DateOnly CurrDate = DateOnly.FromDateTime(DateTime.Now);
+        TimeOnly CurrTime = TimeOnly.FromDateTime(DateTime.Now);
+
+        if (meeting!.Date < CurrDate || (meeting!.Date == CurrDate && meeting.Time.AddHours(meeting.Duration) < CurrTime))
+        {
+            hasEnded = true;
+        }
+    }
+}

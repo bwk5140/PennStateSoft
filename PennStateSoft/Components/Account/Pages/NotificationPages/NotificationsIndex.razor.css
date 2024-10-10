@@ -1,0 +1,60 @@
+﻿.btn-labeled {
+    display: inline-block;
+    align-items: center;
+    padding: 0.4rem 0.4rem;
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    text-decoration: none;
+    background-color: #2264d4;
+    cursor: pointer;
+    background-image: linear-gradient(#2264d4, #1b4ea3);
+}
+    .btn-labeled:focus,
+    .btn-labeled:hover {
+        background: rgb(0, 101, 255);
+        text-decoration: inherit;
+        transition-duration: 0s, 0.15s;
+        color: white;
+    }
+
+        .btn-labeled:hover .btn-label {
+            background-color: rgb(0, 83, 210);
+        }
+.showHoverIcon::after {
+    content: attr(data-hover);
+    position: absolute;
+    top: calc(-30px - 100%);
+    left: 0;
+    background: whitesmoke;
+    color: midnightblue;
+}
+.showHoverBtn::after {
+    content: attr(data-hover);
+    position: absolute;
+    top: calc(-35px - 100%);
+    left: -100px;
+    background: whitesmoke;
+    color: midnightblue;
+}
+.icon {
+    display: inline-block;
+    width: 1.6em;
+    height: 1.6em;
+    margin-top: -8px;
+    background-image: url("DeleteAllNotificationsIcon.svg");
+    background-size: contain;
+    background-repeat: no-repeat;
+    vertical-align: middle;
+}
+.icon1 {
+    display: inline-block;
+    width: 1.6em;
+    height: 1.6em;
+    left: -32px;
+    margin-top: 0;
+    background-image: url("UnreadNotificationDotIcon.svg");
+    background-size: contain;
+    background-repeat: no-repeat;
+    vertical-align: middle;
+}

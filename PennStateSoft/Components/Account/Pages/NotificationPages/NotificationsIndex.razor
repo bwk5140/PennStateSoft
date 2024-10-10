@@ -1,0 +1,266 @@
+﻿@page "/Account/Notifications"
+
+@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+@attribute [Authorize]
+
+<PageTitle>Notifications</PageTitle>
+
+<h3>Notifications</h3>
+<div style="align-content:baseline; background-color:@color; width:85%">
+    <div>
+        @if (NotificationsProvider is null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            @if (notifications is not null && notifications.Count > 0)
+            {
+                <div class="ms-lg-3">
+                    <InputCheckbox @bind-Value="SelectAllNotifications" class="darker-border-checkbox form-check-input"
+                                   disabled="@(notifications is null)" @onclick="OnCheckBoxSelected"
+                                   @onmouseenter="ShowCheckboxInfo" @onmouseleave="HideCheckboxInfo">
+                    </InputCheckbox>
+                    <div class="showHoverIcon ms-4 mt-2" data-hover="@CheckboxInfo" style="position:relative;"></div>
+                </div>
+
+                @if (SelectedNotifications is not null && ((SelectedNotifications!.Count > 1 && notifications!.Count > 1)
+               || (SelectedNotifications.Count == 1 && notifications!.Count == 1)))
+                {
+                    <div nav-item px-3>
+                        <button class="btn btn-labeled ms-5 me-4" type="submit"
+                                style="float:right;" disabled="@(notifications is null)" @onclick="DeleteNotifications"
+                                @onmouseenter="ShowButtonIconInfo" @onmouseleave="HideButtonIconInfo">
+
+                            <i class="icon"></i>
+                        </button>
+                        <div class="showHoverBtn text-nowrap" data-hover="@ButtonIconInfo" style="position:relative; float:right;"></div>
+                    </div>
+
+                    <div style="text-align:center;">
+                        @if (SelectedNotifications.Count() == notifications!.Count() && SelectAllNotifications)
+                        {
+                            <p style="color:#0070E0">All (@SelectedNotifications.Count()) notification(s) selected.</p>
+                        }
+                        else if (SelectedNotifications.Count() <= 1)
+                        {
+                            <p style="color:#0070E0">(@SelectedNotifications.Count()) notification selected.</p>
+                        }
+                        else
+                        {
+                            <p style="color:#0070E0">(@SelectedNotifications.Count()) notifications selected.</p>
+                        }
+
+                    </div>
+                }
+
+                <QuickGrid Class="table" ItemsProvider="@NotificationsProvider">
+                    <TemplateColumn Context="notification">
+                        <CascadingValue Value="notifications">
+                            <CascadingValue Value="notification" IsFixed=true>
+                                <CascadingValue Value="SelectedNotifications">
+                                    <CascadingValue Value="SelectAllNotifications">
+                                        <NotificationDetails OnDeleteCallback="UpdateGridProvider" 
+                                                             OnSelected="UpdateGridProvider" 
+                                                                             EventCallback="UpdateGridProvider"/>
+                                    </CascadingValue>
+                                </CascadingValue>
+                            </CascadingValue>
+                        </CascadingValue>
+                    </TemplateColumn>
+                </QuickGrid>
+            }
+            else
+            {
+                <hr />
+                <p class="ms-1 mt-2" style="color:lightslategray; text-align:center;">No new notifications.</p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+
+    GridItemsProvider<Notification>? NotificationsProvider;
+    [Parameter]
+    public List<Notification>? notifications { get; set; }
+    [Parameter]
+    public List<Notification>? SelectedNotifications { get; set; }
+    [Parameter]
+    public string CheckboxInfo { get; set; } = "";
+    [Parameter]
+    public string ButtonIconInfo { get; set; } = "";
+    [Parameter]
+    public string? color { get; set; }
+    public bool SelectAllNotifications { get; set; }
+    private string? UserName;
+    private bool IsAdmin = false;
+    private bool IsComplaintAuthor = false;
+    private ClaimsPrincipal? ClaimsPrincipal;
+    private ComplaintReply? complaintReply;
+    private ApplicationUser? User;
+    List<IdentityRole>? Roles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = AppDbFactory.CreateDbContext();
+
+        if (SelectedNotifications is null)
+        {
+            SelectedNotifications = new List<Notification>();
+        }
+
+        var AuthState = await AuthStateProvider.GetAuthenticationStateAsync();
+        ClaimsPrincipal = AuthState.User;
+        User = await UserManager.GetUserAsync(ClaimsPrincipal);
+
+        if (User is not null)
+        {
+            UserName = User.UserName;
+            using var appContext = await AppDbFactory.CreateDbContextAsync();
+
+            //Get the users roles
+            var userRoles = appContext.UserRoles.Where(ur => ur.UserId == User.Id);
+            Roles = new List<IdentityRole>();
+
+            if (userRoles is not null)
+            {
+                foreach (var userRole in userRoles)
+                {
+                    var role = await appContext.Roles.FirstOrDefaultAsync(r => r.Id == userRole.RoleId);
+                    Roles.Add(role!);
+                }
+            }
+            if (Roles.FirstOrDefault(r => r.Name == "Admin") is not null)
+            {
+                IsAdmin = true;
+            }
+            notifications = context.Notifications.
+                    Where(n => n.Author != User.UserName && 
+                        (n.Recipient == User.UserName)).ToList();
+        }
+        if (notifications is not null)
+        {
+            notifications = notifications.OrderByDescending(n => n.Created).ToList();
+
+            var Result = GridItemsProviderResult.From<Notification>(items: notifications, totalItemCount: notifications.Count);
+            NotificationsProvider = request => ValueTask.FromResult(Result);
+        }
+    }
+
+    public async Task UpdateNotification(Notification notification)
+    {
+        using var context = AppDbFactory.CreateDbContext();
+        context.Attach(notification!).State = EntityState.Modified;
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!NotificationExists(notification!.Id))
+            {
+                NavigationManager.NavigateTo("Account/NotFound");
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
+
+    bool NotificationExists(int id)
+    {
+        using var context = AppDbFactory.CreateDbContext();
+        return context.Notifications.Any(e => e.Id == id);
+    }
+
+    private void UpdateGridProvider()
+    {
+        UpdateGridProvider(notifications!);
+    }
+    private void UpdateGridProvider(List<Notification> notifications)
+    {
+        var result = GridItemsProviderResult.From<Notification>(items: notifications!, totalItemCount: notifications!.Count);
+        NotificationsProvider = req => ValueTask.FromResult(result);
+    }
+    public async Task DeleteNotifications()
+    {
+        using var context = AppDbFactory.CreateDbContext();
+        foreach (var notification in SelectedNotifications!)
+        {
+            context.Notifications.Remove(notification!);
+            await context.SaveChangesAsync();
+        }
+        UpdateGridProvider();
+        NavigationManager.Refresh(true);
+    }
+    private void ShowCheckboxInfo()
+    {
+        CheckboxInfo = "Select all";
+    }
+    private void HideCheckboxInfo()
+    {
+        Task.Delay(3500);
+        CheckboxInfo = "";
+    }
+    private async Task OnCheckBoxSelected()
+    {
+        SelectAllNotifications = !SelectAllNotifications;
+        
+        using var context = AppDbFactory.CreateDbContext();
+
+        foreach (var notification in notifications!)
+        {
+            notification.Selected = SelectAllNotifications;
+            context.Attach(notification!).State = EntityState.Modified;
+
+            try
+            {
+                await context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!NotificationExists(notification!.Id))
+                {
+                    NavigationManager.NavigateTo("Account/NotFound");
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            if (SelectAllNotifications)
+            {
+                if (!SelectedNotifications!.Contains(notification))
+                {
+                    SelectedNotifications!.Add(notification);
+                }
+            }
+            else
+            {
+                SelectedNotifications!.Remove(notification);
+            }
+        }
+        UpdateGridProvider();
+    }
+    private void ShowButtonIconInfo()
+    {
+        ButtonIconInfo = "Delete selected notification(s)";
+    }
+    private void HideButtonIconInfo()
+    {
+        Task.Delay(3500);
+        ButtonIconInfo = "";
+    }
+}
+

@@ -1,0 +1,199 @@
+﻿@page "/Account/Complaints/Delete"
+
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppUsersDbFactory
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@inject IRoleStore<IdentityRole> RoleStore
+@inject IRoleValidator<IdentityRole> RoleValidator
+@inject IEnumerable<RoleValidator<IdentityRole>> RoleValidators
+@inject ILogger<RoleManager<IdentityRole>> RoleLogger
+@inject IdentityErrorDescriber IdentityErrorDescriber
+@inject ILookupNormalizer KeyNormalizer
+
+@attribute [Authorize(Roles = "Client")]
+
+<PageTitle>Close Complaint</PageTitle>
+
+@if (UserName == complaint?.Username)
+{
+     <div style="align-content:baseline; background-color:whitesmoke; width:75%">
+         <div class="ms-5 mt-3">
+            <div>
+                @if (complaint is null)
+                {
+                    <hr />
+                    <p><em>Loading...</em></p>
+                }
+                else
+                {
+                    <h3 class="link-danger">Mark as resolved?</h3>
+                    <hr class="link-danger" />
+                    <h4 class="mt-4">@complaint.Subject</h4>
+                    <hr />
+                    <div class="forms-control border border-light border-start-0 border-end-0 border-bottom-0
+               border-top-0" cols="80">
+                        <div>
+                            <label for="username" class="form-label" style="color:#0070E0"> Username: </label>
+                            <label class=" form-label m-2 me-5 text-black-50"> @complaint.Username </label>
+                            <label class="ms-5 form-label text-black-50"> @complaint.Created.ToLongDateString() at @complaint.Created.ToShortTimeString() </label>
+                        </div>
+                        <div class="mt-3 mb-4">
+                            <textarea class="text-black text-wrap" style="border:none; background-color:whitesmoke" cols="100"
+                                      rows="@uIHelper.Rows" disabled>
+                                @Encoding.ASCII.GetString(complaint.Description!)
+                                </textarea>
+                        </div>
+                    </div>
+                    <EditForm method="post" Model="complaint" OnValidSubmit="DeleteComplaint" FormName="close-complaint" Enhance>
+                        <button type="submit" class="btn btn-danger ms-3 mb-3" disabled="@(complaint is null)">Resolve</button>
+                        <a class="btn btn-secondary ms-2 mb-3" href=@($"Account/Complaints/Details?id={@complaint?.Id}")>
+                            Cancel
+                        </a>
+                    </EditForm>
+                }
+            </div>
+         </div>
+     </div>
+}
+else
+{
+    <NotFound/>
+}
+
+
+@code {
+    Complaint? complaint;
+
+    private string? UserName;
+    private ApplicationUser user = default!;
+    private ClaimsPrincipal? claimsPrincipal;
+
+    [SupplyParameterFromQuery]
+    public int Id { get; set; }
+
+    protected UIHelper uIHelper = new();
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private ApplicationRoleManager? RoleManager;
+    private IdentityRole? Role;
+    private Notification? notification;
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        complaint = await context.Complaint.FirstOrDefaultAsync(m => m.Id == Id);
+
+        if (complaint is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+        else
+        {
+            var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
+            claimsPrincipal = authenticationState.User;
+
+            if (claimsPrincipal is not null)
+            {
+                user = await UserManager.GetUserAsync(claimsPrincipal);
+
+            }
+            if (user is not null)
+            {
+                UserName = user.UserName;
+            }
+        }
+
+        uIHelper.CalculateSize(@Encoding.ASCII.GetString(complaint!.Description!));
+    }
+    private async Task RemoveRoles()
+    {
+        RoleManager = new ApplicationRoleManager(RoleStore, RoleValidators, KeyNormalizer, IdentityErrorDescriber, RoleLogger);
+        Role = await RoleManager.FindByNameAsync("ComplaintAuthor" + complaint!.Id).ConfigureAwait(false);
+        //var Users = UserManager.GetUsersInRoleAsync("MeetingCreator" + meeting.Id).Result;
+
+        var result = await RoleManager.DeleteAsync(Role!);
+
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        var complaintReplies = context.ComplaintReply.Where(cr => cr.ComplaintId == complaint.Id).ToList();
+
+        if (complaintReplies is not null)
+        {
+            foreach (var complaintReply in complaintReplies)
+            {
+                Role = await RoleManager.FindByNameAsync("ComplaintReplyAuthor" + complaint!.Id + "_" + complaintReply.Id).ConfigureAwait(false);
+                result = await RoleManager.DeleteAsync(Role!);
+
+                var complaintReplyReplies = context.ReplyReply.Where(rr => rr.ComplaintReplyReplyId == complaintReply.Id).ToList();
+                
+                if (complaintReplyReplies is not null)
+                {
+                    foreach (var complaintReplyReply in complaintReplyReplies)
+                    {
+                        Role = await RoleManager.FindByNameAsync("ReplyReplyAuthor" + complaintReply!.Id + "_" + complaintReplyReply.Id).ConfigureAwait(false);
+                        result = await RoleManager.DeleteAsync(Role!);
+                    }
+                }
+            }
+        }
+    }
+    private async Task CreateNotification()
+    {
+        using var context = AppUsersDbFactory.CreateDbContext();
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+        var adminUserRoles = context.UserRoles.Where(Ur => Ur.RoleId == adminRole!.Id);
+
+        foreach (var adminUserRole in adminUserRoles)
+        {
+            var recipientAccts = context.Users.Where(u => u.Id == adminUserRole.UserId).ToList();
+            foreach (var adminAcc in recipientAccts)
+            {
+                notification = new Notification
+                    {
+                        ReferenceID = complaint.Id,
+                        Author = user!.UserName,
+                        UserId = adminAcc.Id,
+                        Recipient = adminAcc.UserName,
+                        Message = "closed the complaint, ",
+                        Link = $"/Account/Complaints/Details?id={complaint.Id}",
+                        LinkTo = $"{complaint.Subject}",
+                        Read = false
+                    };
+                await AddNotification(notification);
+            }
+        }
+    }
+    private async Task AddNotification(Notification notification)
+    {
+        using var context = AppUsersDbFactory.CreateDbContext();
+        context.Notifications.Add(notification!);
+        await context.SaveChangesAsync();
+    }
+    private async Task DeleteNotifications()
+    {
+        //Delete all complaint reply notifications tied to this complaint
+        using var context = AppUsersDbFactory.CreateDbContext();
+        var notifications = context.Notifications.Where(n => n.ReferenceID == complaint.Id && n.UserId == user.Id);
+
+        if (notifications is not null && notifications.Count() > 0)
+        {
+            foreach (var notification in notifications)
+            {
+                context.Notifications.Remove(notification);
+                await context.SaveChangesAsync();
+            }
+        }
+    }
+    private async Task DeleteComplaint()
+    {
+        await CreateNotification();
+        await RemoveRoles();
+        await DeleteNotifications();
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        context.Complaint.Remove(complaint!);
+        await context.SaveChangesAsync();
+        NavigationManager.NavigateTo("/Account/Complaints");
+    }
+}

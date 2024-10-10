@@ -1,0 +1,221 @@
+﻿@implements IDisposable
+@inject IDbContextFactory<PennStateSoft.Data.UserComplaints> ComplaintsDbFactory
+@inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppUsersDbFactory
+@inject NavigationManager NavigationManager
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IRoleStore<IdentityRole> RoleStore
+@inject IRoleValidator<IdentityRole> RoleValidator
+@inject IEnumerable<RoleValidator<IdentityRole>> RoleValidators
+@inject ILogger<RoleManager<IdentityRole>> RoleLogger
+@inject IdentityErrorDescriber IdentityErrorDescriber
+@inject ILookupNormalizer KeyNormalizer
+
+@attribute [Authorize]
+
+<button type="button" class="btn btn-primary text-primary" style="border:none; background:inherit;"
+        @onclick="OnReplyClicked">
+    Reply
+</button>
+<hr />
+<div class="mt-3">
+    <div class="m-3" style="text-align:right; width:75%;">
+        @if (ReplyClicked)
+        {
+            <form method="post"  Model="@ComplaintReply" @onsubmit="OnSubmitClickedAsync" @formname="create-complaintreply">
+                <InputTextArea id="replydescription" @bind-Value="ReplyDescription" class="form-control text-wrap"
+                               rows="@uIHelper.Rows" @onchange="@(()=> uIHelper.CalculateSize(ReplyDescription))" autofocus>
+                </InputTextArea>
+                <div class="m-2 mb-5" style="text-align:right; width:99%">
+                    <button type="reset" class="btn btn-secondary" @onclick="OnCancelClicked">Cancel</button>
+                    <button type="submit" class="btn btn-primary" >Reply</button>
+                </div>
+                <AntiforgeryToken />
+            </form>
+        }
+    </div>  
+</div>
+
+@code {
+
+    [SupplyParameterFromForm]
+    private string ReplyDescription { get; set; } = "";
+
+    protected UIHelper uIHelper = new();
+
+    [CascadingParameter]
+    public Complaint? complaint { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    public ComplaintReply? ComplaintReply { get; set; } = new();
+
+    private ClaimsPrincipal? claimsPrincipal { get; set; }
+
+    [CascadingParameter]
+    public int Id { get; set; }
+
+    private bool ReplyClicked = false;
+    private Notification? notification;
+
+    [Parameter]
+    public EventCallback<SaveChangesEventArgs> OnSaveNewReplyCallback { get; set; }
+
+    private  ApplicationUser user = default!;
+
+    private IEnumerable<IdentityError>? identityErrors;
+    private ApplicationRoleManager? RoleManager;
+    private IdentityRole? Role;
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+
+        if (complaint!.ComplaintReplies is null)
+        {
+            complaint.ComplaintReplies = new List<ComplaintReply>();
+        }
+    }
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+    private void OnReplyClicked()
+    {
+        ReplyClicked = true;
+    }
+    private Task OnCancelClicked()
+    {
+        ReplyClicked = false;
+        ReplyDescription = "";
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OnSubmitClickedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        claimsPrincipal = authState.User;
+
+        if (claimsPrincipal is not null)
+        {
+            user = await UserManager.GetUserAsync(claimsPrincipal);
+        }
+
+        if (user is null)
+        {
+            try
+            {
+                NavigationManager.NavigateTo("Account/NotFound");
+            }
+            catch (NavigationException ex)
+            {
+                var source = ex.Source;
+            }
+        }
+
+        ComplaintReply.Username = user!.UserName;
+        ComplaintReply.Created = DateTime.Now;
+        ComplaintReply.Closed = DateTime.Now.AddDays(7);
+        ComplaintReply.Subject = complaint?.Subject;
+        ComplaintReply.ComplaintId = complaint!.Id;
+
+        if (ReplyDescription is not null)
+        {
+            ComplaintReply.Description = Encoding.ASCII.GetBytes(ReplyDescription);
+        }
+        else
+        {
+            await OnCancelClicked();
+            return;
+        }
+
+        await AddComplaintReply();
+        ComplaintReply = new ComplaintReply();
+    }
+    private async Task CreateRole(ApplicationUser authUser, string roleName)
+    {
+        //Create the Role
+        RoleManager = new ApplicationRoleManager(RoleStore, RoleValidators, KeyNormalizer, IdentityErrorDescriber, RoleLogger);
+        Role = await RoleManager.FindByNameAsync(roleName).ConfigureAwait(false);
+
+        if (Role == null)
+        {
+            Role = new IdentityRole(roleName);
+            var roleResult = await RoleManager.CreateAsync(Role);
+        }
+        var result = await UserManager.AddToRoleAsync(authUser, Role.Name!);
+
+        //Check if UserRole was added successfully
+        if (!result.Succeeded)
+        {
+            identityErrors = result.Errors;
+            return;
+        }
+    }
+    private async Task CreateNotification()
+    {
+        using var context = AppUsersDbFactory.CreateDbContext();
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+        var adminUserRoles = context.UserRoles.Where(Ur => Ur.RoleId == adminRole!.Id);
+
+        foreach (var adminUserRole in adminUserRoles)
+        {
+            var recipientAccts = context.Users.Where(u => u.Id == adminUserRole.UserId).ToList();
+            foreach (var adminAcc in recipientAccts)
+            {
+                //Notify all admins of new conversation activity within specific complaints
+                notification = new Notification
+                    {
+                        ReferenceID = complaint.Id,
+                        Author = user!.UserName,
+                        UserId = adminAcc.Id,
+                        Recipient = adminAcc.UserName,
+                        Message = "replied to ",
+                        Link = $"/Account/Complaints/Details?id={complaint.Id}",
+                        LinkTo = $"{complaint.Subject}",
+                        Read = false
+                    };
+                await AddNotification(notification);
+            }
+        }
+        var ComplaintAuthor = await context.Users.FirstOrDefaultAsync(u => u.UserName == complaint.Username);
+        //Notify the complaint author of new replies
+        notification = new Notification
+            {
+                ReferenceID = complaint.Id,
+                Author = user!.UserName,
+                UserId = ComplaintAuthor.Id,
+                Recipient = ComplaintAuthor.UserName,
+                Message = "replied to ",
+                Link = $"/Account/Complaints/Details?id={complaint.Id}",
+                LinkTo = $"{complaint.Subject}",
+                Read = false
+            };
+        await AddNotification(notification);
+    }
+    public async Task AddNotification(Notification notification)
+    {
+        using var context = AppUsersDbFactory.CreateDbContext();
+        context.Notifications.Add(notification);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task AddComplaintReply()
+    {
+        using var context = ComplaintsDbFactory.CreateDbContext();
+        context.ComplaintReply.Add(ComplaintReply);
+        context.Attach(complaint!).State = EntityState.Modified;
+        await context.SaveChangesAsync();
+        await CreateRole(user!, "ComplaintReplyAuthor" + complaint.Id + "_" + ComplaintReply!.Id.ToString());
+        await CreateNotification();
+        await OnCancelClicked();
+        await OnSaveNewReplyCallback.InvokeAsync();
+    }
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}
