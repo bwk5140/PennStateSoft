@@ -1,4 +1,4 @@
-﻿.page {
+﻿span.page {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -70,7 +70,7 @@ h1 {
 
 .grid-container1 {
     display: grid;
-    grid-template-columns: 1.5fr 1fr; 
+    grid-template-columns: 1.5fr 1fr;
     grid-template-rows: auto auto;
     gap: 3px;
     background-color: none;
@@ -99,6 +99,7 @@ h1 {
     max-height: 790px;
     min-width: 350px;
 }
+
 .card3 {
     background-color: white;
     box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.10);
@@ -111,6 +112,7 @@ h1 {
     min-width: 250px;
     max-width: 250px;
 }
+
 .card4 {
     background-color: white;
     box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.10);
@@ -150,7 +152,6 @@ h2 {
     display: grid;
     height: 70%;
     max-width: auto;
-
 }
 
 .user-info {
@@ -233,6 +234,13 @@ span {
     font-size: 0.8em;
     margin-left: 3px;
 }
+
+    span.weak {
+        color: grey;
+        padding: 4px;
+        top: -15px;
+        bottom: 5px;
+    }
 
 .item2 {
     grid-column: 1;
@@ -322,7 +330,6 @@ span {
 .secondItem {
     grid-column: 2 / 3;
     grid-row: 1 / 2;
-
 }
 
 .card2 .header {
@@ -342,60 +349,59 @@ span {
         font-size: 1em;
         color: #666;
     }
+
 .shadow-effect {
     transition: 0.3s
 }
 
-.shadow-effect:hover {
-    -webkit-box-shadow: 0px 4px 15px -6px rgba(0,0,0,0.75);
-    -moz-box-shadow: 0px 4px 15px -6px rgba(0,0,0,0.75);
-    box-shadow: 0px 4px 15px -6px rgba(0,0,0,0.75);
+    .shadow-effect:hover {
+        -webkit-box-shadow: 0px 4px 15px -6px rgba(0,0,0,0.75);
+        -moz-box-shadow: 0px 4px 15px -6px rgba(0,0,0,0.75);
+        box-shadow: 0px 4px 15px -6px rgba(0,0,0,0.75);
+    }
 
-}
 .calendar {
     margin: 7px;
     width: 100%;
     text-align: center;
 }
 
-.calendar .prev_day {
-    text-align: center;
-    padding: 3px;
-    border-radius: 4px;
-    background-color: #fafafa;
-    color: darkgrey;
-}
+    .calendar .prev_day {
+        text-align: center;
+        padding: 3px;
+        border-radius: 4px;
+        background-color: #fafafa;
+        color: darkgrey;
+    }
 
-.calendar .day {
-    width: 50px;
-    height: 50px;
-    min-width: 50px;
-    padding: 3px;
-    border-radius: 4px;
-    background-color: #f8f8f8;
-    cursor: pointer;
+    .calendar .day {
+        width: 50px;
+        height: 50px;
+        min-width: 50px;
+        padding: 3px;
+        border-radius: 4px;
+        background-color: #f8f8f8;
+        cursor: pointer;
+    }
 
-}
+        .calendar .day.header {
+            font-weight: bold;
+            background-color: transparent;
+        }
 
-.calendar .day.header {
-    font-weight: bold;
-    background-color: transparent;
-}
+        .calendar .day.today {
+            background-image: linear-gradient(#186dff, #183369);
+            color: white;
+        }
 
-.calendar .day.today {
-    background-image: linear-gradient(#186dff, #183369);
-    color: white;
-}
+        .calendar .day.selected {
+            background-image: linear-gradient(#b3e1f6, #106ba8);
+            color: white;
+        }
 
-.calendar .day.selected {
-    background-image: linear-gradient(#79a3eb, #0242c3);
-    color: white;
-}
-
-.calendar td {
-    padding: 3px;
-
-}
+    .calendar td {
+        padding: 3px;
+    }
 
 .thirdItem {
     grid-column: 2 / 3;
@@ -426,6 +432,7 @@ span {
     grid-column: 1 / 3;
     grid-row: 1;
 }
+
 .grid-item2 {
     padding-top: 10px;
     padding-bottom: 10px;
@@ -545,12 +552,13 @@ a:active {
     width: 23px;
     height: 23px;
     margin-top: -2px;
-    background-image: url("newComplaintIcon2.svg");
+    background-image: url("newComplaintIcon.svg");
     background-size: contain;
     background-repeat: no-repeat;
     vertical-align: middle;
 }
-.btn-newComplaint{
+
+.btn-newComplaint {
     color: white;
     text-decoration: none;
     margin-left: -6px;
@@ -583,7 +591,7 @@ p4 {
     padding-bottom: 3px;
 }
 
-div1{
+div1 {
     margin-left: -2px;
 }
 

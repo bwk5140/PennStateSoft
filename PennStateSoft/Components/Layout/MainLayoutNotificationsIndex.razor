@@ -13,12 +13,31 @@
     {
         @if (ExistingUnreadNotifications)
         {
-            <QuickGrid Class="table" ItemsProvider="@NotificationsProvider">
+            <QuickGrid ItemsProvider="@NotificationsProvider">
                 <TemplateColumn Context="notification">
                     <CascadingValue Value="notification">
                         <CascadingValue Value="notifications">
                             <CascadingValue Value="User" IsFixed="true">
+                                @{
+                                    string title = notification!.Link!.Substring(notification.Link.IndexOf('t') + 2);
+                                    int index = title.IndexOf('/');
+                                    title = title.Substring(0, index);
+                                    string icon = "";
+                                    @if (title.Equals("Meetings"))
+                                    {
+                                        icon = "icon2";
+                                    }
+                                    else
+                                    {
+                                        icon = "icon1";
+                                    }
+                                }
+                                <span class="weak">
+                                    <i class="@icon me-1 mb-1"></i>
+                                    @title
+                                </span>
                                 <MainLayoutNotificationDetails eventCallback="RevalidateNotifications" />
+                                <hr style="top:-5px;" />
                             </CascadingValue>
                         </CascadingValue>
                     </CascadingValue>
