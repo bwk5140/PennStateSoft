@@ -8,89 +8,85 @@
 
 @attribute [Authorize(Roles = "Admin")]
 
-<AuthorizeView>
-    <Authorized>
-        <body>
-            <div class="container">
-                <div class="card1">
-                    <UserGreeting></UserGreeting>
-                    <div class="wrapper">
-                        <div class="grid-container1">
-                            <div class="grid-item1 firstItem">
+<body>
+    <div class="container">
+        <div class="card1">
+            <UserGreeting></UserGreeting>
+            <div class="wrapper">
+                <div class="grid-container1">
+                    <div class="grid-item1 firstItem">
+                        <div class="card2">
+                            <h2>
+                                Meetings:
+                                <b><a href="Account/Meetings" target="_blank">View all › </a></b>
+                            </h2>
+                            <div class="grid-container">
+                                <div class="grid-item item1">
+                                    <div class="mainList">
+                                        <h3 class="header-with-line">@MeetingsCardTitle</h3>
+                                        @if (upcomingMeetings != null && upcomingMeetings.Count() > 0)
+                                        {
+                                            @foreach (var meeting in upcomingMeetings)
+                                            {
+                                                <article class="meeting">
+                                                    <img src="/test3.svg" alt="Meeting Icon" class="meetingImage">
+                                                    <a href="Account/Meetings/Details?id=@meeting.Id" class="meetingName">@meeting.Name</a>
+                                                    <span class="meetingInfo">
+                                                        @meeting.Date.ToShortDateString() @meeting.Time.ToShortTimeString()
+                                                        <span>@GetMeetingRoom(meeting.RoomId).Name</span>
+                                                    </span>
+                                                </article>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="weak">No meetings today</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid-item1 secondItem">
+                        <div class="grid-container">
+                            <div class="card2">
+                                <Calendar>
+                                    <DayTemplate Context="day">
+                                        @{
+                                            DateTime selectedDate = day.Date;
+                                            string currentDay = day.Date == DateTime.Now.Date ? "today" : "";
+                                            string selectedDay = SelectedDay == day.Day ? "selected" : "";
+                                        }
+                                        @if (day.IsInThisMonth)
+                                        {
+                                            <div class="ms-2 day shadow-effect @selectedDay @currentDay" @onclick="@(()=>OnDayClicked(day.Day, selectedDate))">@day.Day</div>
+                                        }
+                                    </DayTemplate>
+                                </Calendar>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid-item1 thirdItem">
+                        <div class="grid-container2">
+                            <div class="grid-item3 itemCardAdmin">
                                 <div class="card2">
-                                    <h2>
-                                        Meetings:
-                                        <b><a href="Account/Meetings" target="_blank">View all › </a></b>
-                                    </h2>
+                                    <div class="row">
+                                        <strong>
+                                            <p3>
+                                                Notifications:
+                                                <a href="/Account/Notifications">View all › </a>
+                                            </p3>
+                                        </strong>
+                                    </div>
                                     <div class="grid-container">
-                                        <div class="grid-item item1">
-                                            <div class="mainList">
-                                                <h3 class="header-with-line">@MeetingsCardTitle</h3>
-                                                @if (upcomingMeetings != null && upcomingMeetings.Count() > 0)
-                                                {
-                                                    @foreach (var meeting in upcomingMeetings)
-                                                    {
-                                                        <article class="meeting">
-                                                            <img src="/test3.svg" alt="Meeting Icon" class="meetingImage">
-                                                            <a href="Account/Meetings/Details?id=@meeting.Id" class="meetingName">@meeting.Name</a>
-                                                            <span class="meetingInfo">
-                                                                @meeting.Date.ToShortDateString() @meeting.Time.ToShortTimeString()
-                                                                <span>@GetMeetingRoom(meeting.RoomId).Name</span>
-                                                            </span>
-                                                        </article>
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    <span class="weak">No meetings today</span>
-                                                }
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="grid-item1 secondItem">
-                                <div class="grid-container">
-                                    <div class="card2">
-                                        <Calendar>
-                                            <DayTemplate Context="day">
-                                                @{
-                                                    DateTime selectedDate = day.Date;
-                                                    string currentDay = day.Date == DateTime.Now.Date ? "today" : "";
-                                                    string selectedDay = SelectedDay == day.Day ? "selected" : "";
-                                                }
-                                                @if (day.IsInThisMonth)
-                                                {
-                                                    <div class="ms-2 day shadow-effect @selectedDay @currentDay" @onclick="@(()=>OnDayClicked(day.Day, selectedDate))">@day.Day</div>
-                                                }
-                                            </DayTemplate>
-                                        </Calendar>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="grid-item1 thirdItem">
-                                <div class="grid-container2">
-                                    <div class="grid-item3 itemCardAdmin">
-                                        <div class="card2">
-                                            <div class="row">
-                                                <strong>
-                                                    <p3>
-                                                        Notifications:
-                                                        <a href="/Account/Notifications">View all › </a>
-                                                    </p3>
-                                                </strong>
-                                            </div>
-                                            <div class="grid-container">
-                                                @if (User is not null)
-                                                {
-                                                    <div1 style="font-size:small;">
-                                                        <CascadingValue Value="@User" IsFixed=true>
-                                                            <NotificationsIndexPreview />
-                                                        </CascadingValue>
-                                                    </div1>
-                                                }
-                                            </div>
-                                        </div>
+                                        @if (User is not null)
+                                        {
+                                            <div1 style="font-size:small;">
+                                                <CascadingValue Value="@User" IsFixed=true>
+                                                    <NotificationsIndexPreview />
+                                                </CascadingValue>
+                                            </div1>
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -98,9 +94,9 @@
                     </div>
                 </div>
             </div>
-        </body>
-    </Authorized>
-</AuthorizeView>
+        </div>
+    </div>
+</body>
 
 @code
 {
