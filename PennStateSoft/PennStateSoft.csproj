@@ -28,7 +28,9 @@
 
   <ItemGroup>
     <None Remove="Components\Layout\MainLayoutNotifications.razor.css" />
+    <None Remove="Components\Pages\AdminHomePage.razor.css" />
     <None Remove="Components\Pages\Calendar.razor.css" />
+    <None Remove="Components\Pages\ClientHomePage.razor.css" />
   </ItemGroup>
 
   <ItemGroup>
@@ -61,7 +63,9 @@
 	
   <ItemGroup>
     <Content Include="Components\Layout\MainLayoutNotifications.razor.css" />
+    <Content Include="Components\Pages\AdminHomePage.razor.css" />
     <Content Include="Components\Pages\Calendar.razor.css" />
+    <Content Include="Components\Pages\ClientHomePage.razor.css" />
   </ItemGroup>
 
   <ItemGroup>
