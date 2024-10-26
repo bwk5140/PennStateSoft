@@ -1,0 +1,20 @@
+ssh BrianKarimi@bkraspi mkdir ~/PennStateSoft
+
+scp -r C:/Users/brian/OneDrive/Desktop/Apps/PennStateSoft/PennStateSoft/bin/Debug/net8.0/publish/* BrianKarimi@bkraspi:~/PennStateSoft
+
+ASPNETCORE_URLS="http://*:5000" dotnet ./PennStateSoft.dll
+
+sudo systemctl start kestrel-pennstatesoft.service
+sudo systemctl status kestrel-pennstatesoft.service
+
+◝ kestrel-pennstatesoft.service - Example .NET Web API App running on Linux
+    Loaded: loaded (/etc/systemd/system/kestrel-pennstatesoft.service; enabled)
+    Active: active (running) since Thu 2016-10-18 04:09:35 NZDT; 35s ago
+Main PID: 9021 (dotnet)
+    CGroup: /system.slice/kestrel-pennstatesoft.service
+            └─9021 /usr/local/bin/dotnet /var/www/pennstatesoft/pennstatesoft.dll
+
+python requirement - version
+testing requirements
+
+Replaced help page links with in page components that are dynamic. Fixed UI button hint text position in RoomsIndex component. Included a process for tracking the opened notifications tab in the MainLayoutNotifications component.

@@ -37,9 +37,8 @@
     color: midnightblue;
 }
 
-span.weak {
-    color: grey;
-    padding: 4px;
+p.weak {
+    text-decoration-color: grey;
     top: -15px;
     bottom: 5px;
 }

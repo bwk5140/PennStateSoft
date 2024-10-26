@@ -1,6 +1,4 @@
-﻿@page "/AdminHome"
-
-@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
+﻿@inject IDbContextFactory<PennStateSoft.Data.MeetingContext> MeetingDbFactory
 @inject IDbContextFactory<PennStateSoft.Data.ApplicationDbContext> AppDbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserManager<ApplicationUser> UserManager
@@ -138,15 +136,6 @@
         upcomingMeetings = new List<Meeting>();
         var someMeetings = new List<Meeting>();
         var members = context.Members.Where(m => m.UserId == User.Id);
-        /*
-        if (members is not null)
-        {
-        foreach (var member in members)
-            {
-            someMeetings = context.Meeting.Where(m => m.Id == member.MeetingId).ToList();
-    }
-    }
-    */
 
         if (userRoles is not null && userRoles.Count() > 0)
         {

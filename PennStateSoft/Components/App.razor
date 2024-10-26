@@ -12,6 +12,9 @@
     <HeadOutlet @rendermode="RenderModeForPage" />
     <script type="text/javascript">
         async function getDimensions() {
+            addEventListener('cancel', (e) => {
+                return;
+            });
             return {
                 width: window.innerWidth,
                 height: window.innerHeight

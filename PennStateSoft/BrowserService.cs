@@ -17,10 +17,6 @@ namespace PennStateSoft
         {
             return await _js.InvokeAsync<BrowserDimension>("getDimensions");
         }
-        public async Task<IBrowserFile> GetImageFile()
-        {
-            return await _js.InvokeAsync<IBrowserFile>("getImageFile");
-        }
 
     }
 

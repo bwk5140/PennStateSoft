@@ -42,7 +42,7 @@
 <div class="nav-item">
     @if (ClickedNotifications)
     {
-        <div class="popover" style="position:fixed; min-width:380px;  left: @width; top: @height;"
+        <div class="popover" style="position:fixed; min-width:380px; max-height:700px; left: @width; top: @height;"
              @onmouseenter="OnMouseHover" @onmouseleave="OnMouseHover">
             <div class="popover-header">
                 <strong>
@@ -88,7 +88,6 @@
 
     public double Height { get; set; }
     public double Width { get; set; }
-
 
     public List<Notification>? notifications;
     ClaimsPrincipal? claimsPrincipal;
@@ -156,18 +155,23 @@
         ClickedNotifications = !ClickedNotifications;
     }
 
-    private void NotificationsCancel()
+    private async Task NotificationsCancel()
     {
-        if (!MouseHovering)
+        await Task.Factory.StartNew(new Action(CheckIfMouseIsHover));
+    }
+    private void CheckIfMouseIsHover()
+    {
+        while (MouseHovering)
         {
-            ClickedNotifications = false;
+            //Do nothing
         }
+        ClickedNotifications = false;
     }
 
-    private void OnMouseHover()
+    private async Task OnMouseHover()
     {
         MouseHovering = !MouseHovering;
-        NotificationsCancel();
+        await InvokeAsync(StateHasChanged);
     }
 }
 
