@@ -42,7 +42,7 @@
 <div class="nav-item " >
     @if (ClickedNotifications)
     {
-        <div class="popover overflow-scroll" style="position:fixed; min-width:380px; max-height:700px; left: @width; top: @height;"
+        <div class="popover" style="position:fixed; min-width:380px; max-height:700px; left: @width; top: @height;"
              @onmouseenter="OnMouseHover" @onmouseleave="OnMouseHover">
             <div class="popover-header">
                 <strong>
@@ -50,7 +50,7 @@
                 </strong>
                 <a href="/Account/Notifications" style="float:right;">View all › </a>
             </div>
-            <div class="popover-body">
+            <div class="popover-body overflow-scroll" style="max-height:650px;">
                 @if (User is not null)
                 {
                     <div class="" style="font-size:small;">
