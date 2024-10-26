@@ -39,10 +39,10 @@
     </button>
     <div class="showHover2 text-nowrap" data-hover="@Button2Info" style="position:relative;"></div>
 </div>
-<div class="nav-item">
+<div class="nav-item " >
     @if (ClickedNotifications)
     {
-        <div class="popover" style="position:fixed; min-width:380px; max-height:700px; left: @width; top: @height;"
+        <div class="popover overflow-scroll" style="position:fixed; min-width:380px; max-height:700px; left: @width; top: @height;"
              @onmouseenter="OnMouseHover" @onmouseleave="OnMouseHover">
             <div class="popover-header">
                 <strong>
@@ -53,11 +53,11 @@
             <div class="popover-body">
                 @if (User is not null)
                 {
-                    <div1 style="font-size:small;">
+                    <div class="" style="font-size:small;">
                         <CascadingValue Value="@User" IsFixed=true>
                             <MainLayoutNotificationsIndex />
                         </CascadingValue>
-                    </div1>
+                    </div>
                 }
                 else
                 {
@@ -115,6 +115,7 @@
     {
         base.OnAfterRender(firstRender);
         await GetDimensions();
+        await InvokeAsync(StateHasChanged);
     }
 
     public async Task GetDimensions()
