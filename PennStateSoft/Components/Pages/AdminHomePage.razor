@@ -38,7 +38,7 @@
                                         }
                                         else
                                         {
-                                            <span class="weak">No meetings today</span>
+                                            <span class="weak">@NoMeetingsDefaultText</span>
                                         }
                                     </div>
                                 </div>
@@ -109,7 +109,12 @@
     public string? MeetingsCardTitle { get; set; }
 
     [Parameter]
+    public string? NoMeetingsDefaultText { get; set; }
+
+    [Parameter]
     public string? Month { get; set; }
+
+    private DateTime dateToday = DateTime.Now.Date;
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,6 +124,7 @@
         if (claimsPrincipal.Identity.IsAuthenticated)
         {
             MeetingsCardTitle = "Upcoming Meetings";
+            NoMeetingsDefaultText = "No upcoming meetings";
             await LoadUpcomingMeetings();
         }
     }
@@ -203,6 +209,15 @@
     }
     private async Task LoadSelectedDaysMeetings(int index, DateTime selectedDate)
     {
+        if (selectedDate.Date == dateToday)
+        {
+            NoMeetingsDefaultText = "No meetings today";
+        }
+        else
+        {
+            NoMeetingsDefaultText = "No meetings on this day";
+        }
+
         using var context = MeetingDbFactory.CreateDbContext();
         var allMeetings = await context.Meeting.ToListAsync();
         Rooms = await context.Room.ToListAsync();

@@ -17,7 +17,7 @@
             @onclick="NotificationsClicked" @onblur="NotificationsCancel">
         <AuthorizeView>
             <NotAuthorized>
-                <i class="mt-1 icon2"></i>
+                <i class="mt-1 icon2"></i> 
             </NotAuthorized>
             <Authorized>
                 @if (dbContext is not null)
@@ -42,7 +42,7 @@
 <div class="nav-item " >
     @if (ClickedNotifications)
     {
-        <div class="popover" style="position:fixed; min-width:380px; max-height:700px; left: @width; top: @height;"
+        <div class="popover" style="position:fixed; min-width:380px; left: @width; top: @height;"
              @onmouseenter="OnMouseHover" @onmouseleave="OnMouseHover">
             <div class="popover-header">
                 <strong>
@@ -115,7 +115,10 @@
     {
         base.OnAfterRender(firstRender);
         await GetDimensions();
-        await InvokeAsync(StateHasChanged);
+        if (ClickedNotifications)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     public async Task GetDimensions()

@@ -9,8 +9,13 @@ namespace PennStateSoft
 
         public void CalculateSize(string value)
         {
-            Rows = Math.Max(value.Split('\n').Length, value.Split('\r').Length);
-            Rows = Math.Max(Rows + 1, 3);
+
+            Rows = value.Length / 100;
+            int rem = value.Length % 100;
+            if (rem != 0 && Rows == 1)
+            {
+                Rows += 1;
+            }
         }
     }
 }
