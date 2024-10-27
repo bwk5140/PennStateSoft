@@ -61,11 +61,21 @@
                                         @{
                                             DateTime selectedDate = day.Date;
                                             string currentDay = day.Date == DateTime.Now.Date ? "today" : "";
-                                            string selectedDay = SelectedDay == day.Day ? "selected" : "";
+                                            string selectedDay = SelectedDay == day.Date ? "selected" : "";
+                                            string color = selectedDay == "selected" ? "white" : "darkgrey";
+                                            @if (selectedDay == "selected" && currentDay == "today")
+                                            {
+                                                color = "white";
+                                            }
                                         }
                                         @if (day.IsInThisMonth)
                                         {
-                                            <div class="ms-2 day shadow-effect @selectedDay @currentDay" @onclick="@(()=>OnDayClicked(day.Day, selectedDate))">@day.Day</div>
+                                            <div class="ms-3 day shadow-effect @selectedDay @currentDay" @onclick="@(()=>OnDayClicked(selectedDate))">@day.Day</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="ms-3 day @selectedDay" style=" background-color: none; color:@color;"
+                                                    @onclick="@(()=>OnDayClicked(selectedDate))">@day.Day</div>
                                         }
                                     </DayTemplate>
                                 </Calendar>
@@ -128,7 +138,10 @@
     private List<IdentityRole>? Roles { get; set; }
     private ClaimsPrincipal? claimsPrincipal;
     private bool IsAdmin = false;
-    private int SelectedDay = 0;
+
+    [Parameter]
+    public DateTime SelectedDay { get; set; }
+
     private ApplicationUser? User;
     [Parameter]
     public string? MeetingsCardTitle { get; set; }
@@ -232,7 +245,7 @@
             .ToList();
         }
     }
-    private async Task LoadSelectedDaysMeetings(int index, DateTime selectedDate)
+    private async Task LoadSelectedDaysMeetings(DateTime selectedDate)
     {
 
         if (selectedDate.Date == dateToday)
@@ -253,7 +266,6 @@
         var userRoles = AppContext.UserRoles.Where(ur => ur.UserId == User!.Id).ToList();
         Roles = new List<IdentityRole>();
         var selectedMeetings = new List<Meeting>();
-        //var members = context.Members.Where(m => m.UserId == User!.Id);
 
         MeetingsCardTitle = selectedDate.ToLongDateString();
 
@@ -304,8 +316,9 @@
 
         if (IsAdmin)
         {
+
             upcomingMeetings = allMeetings
-            .Where(m => m.Date.Day == index)
+            .Where(m => m.Date == DateOnly.FromDateTime(selectedDate))
             .OrderBy(m => m.Date)
             .ThenBy(m => m.Time)
             .ToList();
@@ -313,16 +326,16 @@
         else
         {
             upcomingMeetings = selectedMeetings
-            .Where(m => m.Date.Day == index)
+            .Where(m => m.Date == DateOnly.FromDateTime(selectedDate))
             .OrderBy(m => m.Date)
             .ThenBy(m => m.Time)
             .ToList();
         }
     }
-    private async Task OnDayClicked(int index, DateTime selectedDate)
+    private async Task OnDayClicked(DateTime selectedDate)
     {
-        SelectedDay = index;
-        await LoadSelectedDaysMeetings(index, selectedDate);
+        SelectedDay = selectedDate;
+        await LoadSelectedDaysMeetings(selectedDate);
         StateHasChanged();
     }
     private Room GetMeetingRoom(int roomId)

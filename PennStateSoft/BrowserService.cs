@@ -13,7 +13,6 @@ namespace PennStateSoft
 
         public async Task<BrowserDimension> GetDimensions()
         {
-            BrowserDimension dimensions;
             return await _js.InvokeAsync<BrowserDimension>("getDimensions");
         }
 

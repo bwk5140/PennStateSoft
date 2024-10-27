@@ -28,7 +28,7 @@
                                             {
                                                 <article class="meeting">
                                                     <img src="/test3.svg" alt="Meeting Icon" class="meetingImage">
-                                                    <a href="Account/Meetings/Details?id=@meeting.Id" class="meetingName">@meeting.Name</a>
+                                                    <a href="Account/Meetings/Details?id=@meeting.Id" class="meetingName me-1">@meeting.Name</a>
                                                     <span class="meetingInfo">
                                                         @meeting.Date.ToShortDateString() @meeting.Time.ToShortTimeString()
                                                         <span>@GetMeetingRoom(meeting.RoomId).Name</span>
@@ -47,17 +47,29 @@
                     </div>
                     <div class="grid-item1 secondItem">
                         <div class="grid-container">
-                            <div class="card2">
+                            <div class="card3">
                                 <Calendar>
                                     <DayTemplate Context="day">
                                         @{
                                             DateTime selectedDate = day.Date;
                                             string currentDay = day.Date == DateTime.Now.Date ? "today" : "";
-                                            string selectedDay = SelectedDay == day.Day ? "selected" : "";
+                                            string selectedDay = SelectedDay == day.Date ? "selected" : "";
+                                            string color = selectedDay == "selected" ? "white" : "darkgrey";
+                                            @if (selectedDay == "selected" && currentDay == "today")
+                                            {
+                                                color = "white";
+                                            }
                                         }
                                         @if (day.IsInThisMonth)
                                         {
-                                            <div class="ms-2 day shadow-effect @selectedDay @currentDay" @onclick="@(()=>OnDayClicked(day.Day, selectedDate))">@day.Day</div>
+                                            <div class="ms-3 day shadow-effect @selectedDay @currentDay" @onclick="@(()=>OnDayClicked(selectedDate))">@day.Day</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="ms-3 day @selectedDay" style=" background-color: none; color:@color;"
+                                                 @onclick="@(()=>OnDayClicked(selectedDate))">
+                                                @day.Day
+                                            </div>
                                         }
                                     </DayTemplate>
                                 </Calendar>
@@ -67,7 +79,7 @@
                     <div class="grid-item1 thirdItem">
                         <div class="grid-container2">
                             <div class="grid-item3 itemCardAdmin">
-                                <div class="card2">
+                                <div class="card3">
                                     <div class="row">
                                         <strong>
                                             <p3>
@@ -103,7 +115,6 @@
     private List<IdentityRole>? Roles { get; set; }
     private ClaimsPrincipal? claimsPrincipal;
     private bool IsAdmin = false;
-    private int SelectedDay = 0;
     private ApplicationUser? User;
     [Parameter]
     public string? MeetingsCardTitle { get; set; }
@@ -113,6 +124,9 @@
 
     [Parameter]
     public string? Month { get; set; }
+
+    [Parameter]
+    public DateTime SelectedDay { get; set; }
 
     private DateTime dateToday = DateTime.Now.Date;
 
@@ -207,7 +221,7 @@
             .ToList();
         }
     }
-    private async Task LoadSelectedDaysMeetings(int index, DateTime selectedDate)
+    private async Task LoadSelectedDaysMeetings(DateTime selectedDate)
     {
         if (selectedDate.Date == dateToday)
         {
@@ -279,7 +293,7 @@
         if (IsAdmin)
         {
             upcomingMeetings = allMeetings
-            .Where(m => m.Date.Day == index)
+            .Where(m => m.Date == DateOnly.FromDateTime(selectedDate))
             .OrderBy(m => m.Date)
             .ThenBy(m => m.Time)
             .ToList();
@@ -287,17 +301,17 @@
         else
         {
             upcomingMeetings = selectedMeetings
-            .Where(m => m.Date.Day == index)
+            .Where(m => m.Date == DateOnly.FromDateTime(selectedDate))
             .OrderBy(m => m.Date)
             .ThenBy(m => m.Time)
             .ToList();
         }
 
     }
-    private async Task OnDayClicked(int index, DateTime selectedDate)
+    private async Task OnDayClicked(DateTime selectedDate)
     {
-        SelectedDay = index;
-        await LoadSelectedDaysMeetings(index, selectedDate);
+        SelectedDay = selectedDate;
+        await LoadSelectedDaysMeetings(selectedDate);
         StateHasChanged();
     }
     private Room GetMeetingRoom(int roomId)
